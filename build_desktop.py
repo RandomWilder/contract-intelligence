@@ -148,31 +148,44 @@ if sys.platform == 'darwin':
 
 def install_dependencies():
     """Install required dependencies for building"""
-    dependencies = [
-        'pyinstaller>=5.0',
+    # In GitHub Actions, dependencies are already installed via requirements_desktop.txt
+    # This function now just verifies they're available
+    required_modules = [
+        'pyinstaller',
         'streamlit',
         'openai',
         'chromadb',
-        'google-auth',
-        'google-auth-oauthlib',
-        'google-cloud-vision',
+        'google.auth',
+        'google_auth_oauthlib',
+        'google.cloud.vision',
         'PyPDF2',
-        'python-docx',
-        'opencv-python-headless',
-        'Pillow',
+        'docx',
+        'cv2',
+        'PIL',
         'numpy',
         'requests',
-        'python-dotenv',
+        'dotenv',
         'keyring',
     ]
     
-    print("📦 Installing build dependencies...")
-    for dep in dependencies:
+    print("📦 Verifying dependencies...")
+    missing = []
+    
+    for module in required_modules:
         try:
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', dep])
-            print(f"✅ {dep}")
+            __import__(module)
+            print(f"✅ {module}")
+        except ImportError:
+            print(f"❌ Missing: {module}")
+            missing.append(module)
+    
+    if missing:
+        print(f"⚠️ Missing modules: {missing}")
+        print("Installing missing dependencies...")
+        try:
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install'] + missing)
+            return True
         except subprocess.CalledProcessError:
-            print(f"❌ Failed to install {dep}")
             return False
     
     return True
