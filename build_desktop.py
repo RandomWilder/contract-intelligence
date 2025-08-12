@@ -180,7 +180,7 @@ def install_dependencies():
             missing.append(module)
     
     if missing:
-        print(f"⚠️ Missing modules: {missing}")
+        print(f"[WARNING] Missing modules: {missing}")
         print("Installing missing dependencies...")
         try:
             subprocess.check_call([sys.executable, '-m', 'pip', 'install'] + missing)
@@ -192,7 +192,7 @@ def install_dependencies():
 
 def build_executable():
     """Build the executable using PyInstaller"""
-    print("🔨 Building executable...")
+    print("[INFO] Building executable...")
     
     try:
         # Clean previous builds
@@ -216,7 +216,7 @@ def build_executable():
             else:
                 exe_path = Path('dist') / 'ContractIntelligence'
                 if exe_path.exists():
-                    print(f"💻 Executable created: {exe_path}")
+                    print(f"[SUCCESS] Executable created: {exe_path}")
             
             return True
         else:
@@ -238,11 +238,11 @@ def create_installer():
     elif system == 'Darwin':
         create_macos_installer()
     else:
-        print("ℹ️ Linux installer not implemented yet")
+        print("[INFO] Linux installer not implemented yet")
 
 def create_windows_installer():
     """Create Windows installer using NSIS or Inno Setup"""
-    print("🪟 Creating Windows installer...")
+    print("Creating Windows installer...")
     
     # Create Inno Setup script
     iss_content = f'''[Setup]
@@ -282,11 +282,11 @@ Filename: "{{app}}\\ContractIntelligence.exe"; Description: "{{cm:LaunchProgram,
         f.write(iss_content)
     
     print("[SUCCESS] Windows installer script created (contract_intelligence.iss)")
-    print("💡 To build installer, run: iscc contract_intelligence.iss")
+    print("[INFO] To build installer, run: iscc contract_intelligence.iss")
 
 def create_macos_installer():
     """Create macOS installer"""
-    print("🍎 Creating macOS installer...")
+    print("Creating macOS installer...")
     
     # Create a simple script to package the .app
     script_content = '''#!/bin/bash
@@ -339,7 +339,7 @@ def main():
     create_installer()
     
     print("\n[SUCCESS] Build process completed!")
-    print("\n📋 Next steps:")
+    print("\n[INFO] Next steps:")
     print("1. Test the executable in dist/ directory")
     print("2. Run installer creation scripts if needed")
     print("3. Distribute to users")
