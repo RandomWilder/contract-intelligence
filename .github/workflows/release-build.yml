@@ -96,7 +96,39 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         cd dist
-        zip -r "../${{ matrix.artifact-name }}.zip" "Contract Intelligence.app"
+        # Create proper ZIP without extra compression
+        zip -r -y "../${{ matrix.artifact-name }}.zip" "Contract Intelligence.app"
+        
+        # Create installation instructions
+        cat > ../MACOS_INSTALL.txt << 'EOF'
+        # macOS Installation Instructions
+        
+        ## Step 1: Extract the ZIP
+        1. Double-click ContractIntelligence-macOS.zip to extract
+        2. You should see "Contract Intelligence.app"
+        
+        ## Step 2: Bypass Apple Security Warning
+        Since this app is not signed with Apple Developer certificate:
+        
+        1. Right-click on "Contract Intelligence.app"
+        2. Select "Open" from the context menu
+        3. Click "Open" when the security dialog appears
+        4. The app will now run and be trusted for future launches
+        
+        Alternative method:
+        1. Go to System Preferences > Security & Privacy
+        2. Click "Open Anyway" if you see the app listed
+        
+        ## Step 3: Setup
+        1. Enter your OpenAI API Key
+        2. Upload your Google Cloud Vision credentials JSON file
+        3. Start using Contract Intelligence!
+        
+        ## Requirements
+        - macOS 10.14 or later
+        - OpenAI API Key
+        - Google Cloud Vision credentials
+        EOF
 
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
@@ -147,9 +179,11 @@ jobs:
         
         **macOS:**
         1. Download \`ContractIntelligence-macOS.zip\`
-        2. Extract and drag \`Contract Intelligence.app\` to Applications
-        3. Right-click and select "Open" (first time only, due to security)
-        4. Follow the setup wizard to enter your API keys
+        2. Extract to see \`Contract Intelligence.app\`
+        3. **IMPORTANT**: Right-click the app and select "Open" (bypasses security warning)
+        4. Click "Open" when prompted about unidentified developer
+        5. Follow the setup wizard to enter your API keys
+        6. See MACOS_INSTALL.txt for detailed instructions
         
         ### Requirements:
         - OpenAI API Key
@@ -176,6 +210,8 @@ jobs:
         files: |
           artifacts/ContractIntelligence-Windows.zip
           artifacts/ContractIntelligence-macOS.zip
+          MACOS_INSTALL.txt
+          release_notes.md
         draft: false
         prerelease: false
       env:
