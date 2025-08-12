@@ -144,7 +144,7 @@ if sys.platform == 'darwin':
     with open('contract_intelligence.spec', 'w') as f:
         f.write(spec_content)
     
-    print("✅ PyInstaller spec file created")
+    print("[SUCCESS] PyInstaller spec file created")
 
 def install_dependencies():
     """Install required dependencies for building"""
@@ -168,15 +168,15 @@ def install_dependencies():
         'keyring',
     ]
     
-    print("📦 Verifying dependencies...")
+    print("[INFO] Verifying dependencies...")
     missing = []
     
     for module in required_modules:
         try:
             __import__(module)
-            print(f"✅ {module}")
+                            print(f"[OK] {module}")
         except ImportError:
-            print(f"❌ Missing: {module}")
+                            print(f"[ERROR] Missing: {module}")
             missing.append(module)
     
     if missing:
@@ -206,7 +206,7 @@ def build_executable():
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode == 0:
-            print("✅ Build completed successfully!")
+            print("[SUCCESS] Build completed successfully!")
             
             # Show output location
             if platform.system() == 'Darwin':
@@ -220,13 +220,13 @@ def build_executable():
             
             return True
         else:
-            print("❌ Build failed!")
+            print("[ERROR] Build failed!")
             print("STDOUT:", result.stdout)
             print("STDERR:", result.stderr)
             return False
             
     except Exception as e:
-        print(f"❌ Build error: {e}")
+        print(f"[ERROR] Build error: {e}")
         return False
 
 def create_installer():
@@ -281,7 +281,7 @@ Filename: "{{app}}\\ContractIntelligence.exe"; Description: "{{cm:LaunchProgram,
     with open('contract_intelligence.iss', 'w') as f:
         f.write(iss_content)
     
-    print("✅ Windows installer script created (contract_intelligence.iss)")
+    print("[SUCCESS] Windows installer script created (contract_intelligence.iss)")
     print("💡 To build installer, run: iscc contract_intelligence.iss")
 
 def create_macos_installer():
@@ -299,9 +299,9 @@ IDENTIFIER="com.yourcompany.contractintelligence"
 if [ -d "dist/$APP_NAME" ]; then
     echo "Creating macOS installer..."
     pkgbuild --root dist --identifier $IDENTIFIER --version 1.0.0 --install-location /Applications installers/$PKG_NAME
-    echo "✅ macOS installer created: installers/$PKG_NAME"
+    echo "[SUCCESS] macOS installer created: installers/$PKG_NAME"
 else
-    echo "❌ App bundle not found at dist/$APP_NAME"
+    echo "[ERROR] App bundle not found at dist/$APP_NAME"
     exit 1
 fi
 '''
@@ -311,20 +311,20 @@ fi
         f.write(script_content)
     
     os.chmod('create_macos_installer.sh', 0o755)
-    print("✅ macOS installer script created (create_macos_installer.sh)")
+    print("[SUCCESS] macOS installer script created (create_macos_installer.sh)")
 
 def main():
-    print("🚀 Contract Intelligence Platform - Desktop Build Script")
+    print("Contract Intelligence Platform - Desktop Build Script")
     print("=" * 60)
     
     # Check if we're in the right directory
     if not os.path.exists('streamlit_app.py'):
-        print("❌ Error: streamlit_app.py not found. Run this script from the ragflow directory.")
+        print("[ERROR] streamlit_app.py not found. Run this script from the ragflow directory.")
         return
     
     # Install dependencies
     if not install_dependencies():
-        print("❌ Failed to install dependencies")
+        print("[ERROR] Failed to install dependencies")
         return
     
     # Create PyInstaller spec
@@ -332,13 +332,13 @@ def main():
     
     # Build executable
     if not build_executable():
-        print("❌ Build failed")
+        print("[ERROR] Build failed")
         return
     
     # Create installer
     create_installer()
     
-    print("\n🎉 Build process completed!")
+    print("\n[SUCCESS] Build process completed!")
     print("\n📋 Next steps:")
     print("1. Test the executable in dist/ directory")
     print("2. Run installer creation scripts if needed")
