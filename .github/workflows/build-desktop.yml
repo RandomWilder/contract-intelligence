@@ -30,12 +30,12 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements_desktop.txt') }}
@@ -70,7 +70,7 @@ jobs:
 
     - name: Upload Windows artifact
       if: matrix.os == 'windows-latest'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
         path: ${{ matrix.artifact_name }}.zip
@@ -78,7 +78,7 @@ jobs:
 
     - name: Upload macOS artifact
       if: matrix.os == 'macos-latest'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
         path: ${{ matrix.artifact_name }}.zip
@@ -125,7 +125,7 @@ jobs:
         echo "Built on: $(date)" >> release_info.md
         
     - name: Upload Release Info
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Release-Info
         path: release_info.md
