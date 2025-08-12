@@ -174,9 +174,9 @@ def install_dependencies():
     for module in required_modules:
         try:
             __import__(module)
-                            print(f"[OK] {module}")
+            print(f"[OK] {module}")
         except ImportError:
-                            print(f"[ERROR] Missing: {module}")
+            print(f"[ERROR] Missing: {module}")
             missing.append(module)
     
     if missing:

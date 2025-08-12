@@ -1,0 +1,176 @@
+name: Release Build - Cross-Platform Desktop
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0, v2.1.3
+      - 'v*.*'    # Also supports v1.0, v2.0 format
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Manual build version (e.g., v1.0.0)'
+        required: false
+        default: 'manual'
+
+env:
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  build:
+    name: Build ${{ matrix.os-name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os-name: Windows
+            artifact-name: ContractIntelligence-Windows
+            executable-name: ContractIntelligence.exe
+          - os: macos-latest
+            os-name: macOS
+            artifact-name: ContractIntelligence-macOS
+            executable-name: Contract Intelligence.app
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        architecture: x64
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements_desktop.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements_desktop.txt
+
+    - name: Build desktop application
+      run: python build_desktop.py
+
+    - name: Verify build output (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        if (Test-Path "dist/ContractIntelligence") {
+          Write-Host "[SUCCESS] Windows build directory found"
+          Get-ChildItem "dist/ContractIntelligence" | ForEach-Object { Write-Host "  - $($_.Name)" }
+        } else {
+          Write-Host "[ERROR] Windows build directory not found"
+          exit 1
+        }
+
+    - name: Verify build output (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        if [ -d "dist/Contract Intelligence.app" ]; then
+          echo "[SUCCESS] macOS app bundle found"
+          ls -la "dist/Contract Intelligence.app/Contents/"
+        else
+          echo "[ERROR] macOS app bundle not found"
+          exit 1
+        fi
+
+    - name: Create Windows ZIP
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd dist
+        Compress-Archive -Path "ContractIntelligence" -DestinationPath "../${{ matrix.artifact-name }}.zip"
+
+    - name: Create macOS ZIP
+      if: matrix.os == 'macos-latest'
+      run: |
+        cd dist
+        zip -r "../${{ matrix.artifact-name }}.zip" "Contract Intelligence.app"
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact-name }}
+        path: ${{ matrix.artifact-name }}.zip
+        retention-days: 90
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ContractIntelligence-Windows
+        path: artifacts/
+
+    - name: Download macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ContractIntelligence-macOS
+        path: artifacts/
+
+    - name: Get tag name
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Create release notes
+      run: |
+        cat > release_notes.md << EOF
+        # Contract Intelligence Platform ${{ steps.tag.outputs.tag }}
+        
+        ## Desktop Applications
+        
+        Cross-platform desktop applications built from commit \`${GITHUB_SHA:0:7}\`.
+        
+        ### Installation Instructions:
+        
+        **Windows:**
+        1. Download \`ContractIntelligence-Windows.zip\`
+        2. Extract to a folder on your computer
+        3. Run \`ContractIntelligence.exe\`
+        4. Follow the setup wizard to enter your API keys
+        
+        **macOS:**
+        1. Download \`ContractIntelligence-macOS.zip\`
+        2. Extract and drag \`Contract Intelligence.app\` to Applications
+        3. Right-click and select "Open" (first time only, due to security)
+        4. Follow the setup wizard to enter your API keys
+        
+        ### Requirements:
+        - OpenAI API Key
+        - Google Cloud Vision credentials (JSON file)
+        
+        ### Features:
+        - Contract analysis and intelligence extraction
+        - Hebrew/RTL text support with proper number formatting
+        - Local RAG system for document processing
+        - Secure credential management
+        - Cross-platform compatibility
+        
+        ---
+        **Build Date:** $(date)  
+        **Commit:** ${GITHUB_SHA}
+        EOF
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: Contract Intelligence ${{ steps.tag.outputs.tag }}
+        body_path: release_notes.md
+        files: |
+          artifacts/ContractIntelligence-Windows.zip
+          artifacts/ContractIntelligence-macOS.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
