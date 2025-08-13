@@ -39,8 +39,11 @@ jobs:
     - name: Install macOS system dependencies
       if: matrix.os == 'macos-latest'
       run: |
+        echo "Installing macOS-specific dependencies..."
+        brew update
         brew install gettext
         brew link --force gettext
+        echo "gettext/libintl installed and linked"
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v5
@@ -60,6 +63,20 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements_desktop.txt
+
+    - name: Set macOS build environment
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "Setting up macOS build environment..."
+        export PATH="/opt/homebrew/bin:$PATH"
+        export LDFLAGS="-L/opt/homebrew/lib $LDFLAGS"
+        export CPPFLAGS="-I/opt/homebrew/include $CPPFLAGS"
+        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+        echo "PATH=/opt/homebrew/bin:$PATH" >> $GITHUB_ENV
+        echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
+        echo "macOS environment configured"
 
     - name: Build desktop application
       run: python build_desktop.py
@@ -169,6 +186,11 @@ jobs:
         
         Cross-platform desktop applications built from commit \`${GITHUB_SHA:0:7}\`.
         
+        ### Version ${{ steps.tag.outputs.tag }} Improvements:
+        - Fixed macOS build issues with gettext/libintl library dependencies
+        - Enhanced cross-platform compatibility and stability
+        - Improved GitHub Actions CI/CD pipeline reliability
+        
         ### Installation Instructions:
         
         **Windows:**
@@ -211,7 +233,6 @@ jobs:
           artifacts/ContractIntelligence-Windows.zip
           artifacts/ContractIntelligence-macOS.zip
           MACOS_INSTALL.txt
-          release_notes.md
         draft: false
         prerelease: false
       env:
