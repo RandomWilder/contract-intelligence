@@ -119,38 +119,62 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         cd dist
+        
+        # Set proper permissions for macOS app
+        chmod +x "Contract Intelligence.app/Contents/MacOS/"*
+        
         # Create proper ZIP without extra compression
         zip -r -y "../${{ matrix.artifact-name }}.zip" "Contract Intelligence.app"
         
         # Create installation instructions
         cat > ../MACOS_INSTALL.txt << 'EOF'
-        # macOS Installation Instructions
+        # macOS Installation Instructions (2025)
         
         ## Step 1: Extract the ZIP
         1. Double-click ContractIntelligence-macOS.zip to extract
         2. You should see "Contract Intelligence.app"
+        3. Move the app to your Applications folder (recommended)
         
-        ## Step 2: Bypass Apple Security Warning
-        Since this app is not signed with Apple Developer certificate:
+        ## Step 2: Bypass Apple Gatekeeper Security (REQUIRED)
+        Since this app is not signed with Apple Developer certificate, you MUST use one of these methods:
         
-        1. Right-click on "Contract Intelligence.app"
-        2. Select "Open" from the context menu
-        3. Click "Open" when the security dialog appears
+        ### Method 1 - Right-click Open (Recommended):
+        1. **Right-click** on "Contract Intelligence.app" (DO NOT double-click)
+        2. Select **"Open"** from the context menu
+        3. Click **"Open"** when the security dialog appears asking about unidentified developer
         4. The app will now run and be trusted for future launches
         
-        Alternative method:
-        1. Go to System Preferences > Security & Privacy
-        2. Click "Open Anyway" if you see the app listed
+        ### Method 2 - System Settings:
+        1. Go to **System Settings** > **Privacy & Security**
+        2. Look for the blocked app in the security section
+        3. Click **"Open Anyway"** next to the app listing
         
-        ## Step 3: Setup
-        1. Enter your OpenAI API Key
-        2. Upload your Google Cloud Vision credentials JSON file
-        3. Start using Contract Intelligence!
+        ### Method 3 - Terminal (Advanced):
+        If above methods don't work, run in Terminal:
+        ```
+        sudo spctl --add "path/to/Contract Intelligence.app"
+        sudo xattr -rd com.apple.quarantine "path/to/Contract Intelligence.app"
+        ```
+        
+        ## Step 3: First Launch
+        1. The app should now launch successfully
+        2. Enter your OpenAI API Key when prompted
+        3. Upload your Google Cloud Vision credentials JSON file
+        4. Start using Contract Intelligence!
+        
+        ## Troubleshooting
+        - If you get "damaged" error: Run `sudo xattr -rd com.apple.quarantine "Contract Intelligence.app"`
+        - If permissions error: Run `chmod +x "Contract Intelligence.app/Contents/MacOS/"*`
+        - For persistent issues: Temporarily disable Gatekeeper with `sudo spctl --master-disable`
         
         ## Requirements
-        - macOS 10.14 or later
+        - macOS 10.14 or later (tested on macOS 15 Sequoia)
         - OpenAI API Key
-        - Google Cloud Vision credentials
+        - Google Cloud Vision credentials JSON file
+        
+        ## Security Note
+        This is a safe, locally-built application for personal use. The security warnings are
+        standard for unsigned applications and can be safely bypassed using the methods above.
         EOF
 
     - name: Upload build artifact

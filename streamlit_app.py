@@ -429,28 +429,25 @@ def main():
     # Inject RTL CSS and modern styling first
     inject_rtl_css()
     
-    # Compact header with status indicators in one row
-    header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
-    with header_col1:
-        st.title("📄 Contract Intelligence Platform")
-        st.caption("Local RAG system for contract analysis with Google OCR and OpenAI")
+    # Centered header title and subtitle - pushed to top
+    st.markdown("""
+    <div style="text-align: center; margin-top: -2rem; margin-bottom: 1.5rem; padding-top: 0;">
+        <h1 style="color: #2c3e50; font-weight: 600; margin-bottom: 0.3rem; margin-top: 0; font-size: 2.5rem;">
+            📄 Contract Intelligence Platform
+        </h1>
+        <p style="color: #6c757d; font-size: 1.5rem; margin-bottom: 0; margin-top: 0;">
+            Analyze. Recommend. Act.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    with header_col2:
-        if os.getenv("OPENAI_API_KEY"):
-            st.success("✅ OpenAI Connected")
-        else:
-            st.error("❌ OpenAI Missing")
-            st.caption("Please set OPENAI_API_KEY in .env file")
-            return
+    # Initialize RAGFlow to get status information
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("❌ OpenAI API Key Missing - Please set OPENAI_API_KEY in .env file")
+        return
     
-    with header_col3:
-        # Model selection in header for easy access
-        selected_model = st.selectbox(
-            "AI Model:",
-            options=OPENAI_CHAT_MODELS,
-            index=0,
-            help="Choose the OpenAI model for chat completion"
-        )
+    # Initialize with default model first
+    selected_model = "gpt-4o-mini"
     
     rag = initialize_ragflow(selected_model)
     
@@ -458,8 +455,49 @@ def main():
     documents = rag.list_documents()
     documents_by_folder = rag.list_documents_by_folder()
     
+    # Consolidated status indicators row - 5 columns
+    status_col1, status_col2, status_col3, status_col4, status_col5 = st.columns([1, 1, 1, 1, 1])
+    
+    with status_col1:
+        # Google OCR status
+        google_authenticated = rag.is_google_authenticated()
+        if google_authenticated:
+            st.success("✅ Google OCR")
+        else:
+            st.warning("⚠️ Google OCR")
+    
+    with status_col2:
+        # OpenAI API connection status
+        if os.getenv("OPENAI_API_KEY"):
+            st.success("✅ OpenAI Connected")
+        else:
+            st.error("❌ OpenAI Missing")
+    
+    with status_col3:
+        # Document count and folder statistics
+        total_docs = len(documents)
+        total_folders = len(documents_by_folder)
+        if total_folders > 1:
+            st.info(f"📊 {total_docs} Docs ({total_folders} folders)")
+        else:
+            st.info(f"📊 {total_docs} Documents")
+    
+    with status_col4:
+        # Current AI model display
+        st.info(f"🤖 {selected_model}")
+    
+    with status_col5:
+        # Model selection dropdown
+        selected_model = st.selectbox(
+            "AI Model:",
+            options=OPENAI_CHAT_MODELS,
+            index=OPENAI_CHAT_MODELS.index(selected_model) if selected_model in OPENAI_CHAT_MODELS else 0,
+            help="Choose the OpenAI model for chat completion",
+            key="main_model_selector"
+        )
+    
     # Create main layout with optimized columns
-    main_col1, main_col2 = st.columns([1, 2])
+    main_col1, main_col2 = st.columns([1, 4])
     
     # Left column: Document Management & Google Auth
     with main_col1:
@@ -569,51 +607,39 @@ def main():
     with main_col2:
         st.subheader("💬 Query Your Contracts")
         
-        # Status indicators row
-        status_col1, status_col2, status_col3 = st.columns(3)
-        with status_col1:
-            if google_authenticated:
-                st.success("✅ Google OCR")
-            else:
-                st.warning("⚠️ Google OCR")
-        
-        with status_col2:
-            total_docs = len(documents)
-            total_folders = len(documents_by_folder)
-            if total_folders > 1:
-                st.info(f"📊 {total_docs} Docs ({total_folders} folders)")
-            else:
-                st.info(f"📊 {total_docs} Documents")
-        
-        with status_col3:
-            st.info(f"🤖 {selected_model}")
+
     
-        # Contract Selection Interface
+        # Contract Selection Interface - Side by side layout
         if documents:
-            # Folder selection first
-            folder_options = ["All Folders"] + list(documents_by_folder.keys())
-            selected_folder = st.selectbox(
-                "📁 Select Folder:",
-                options=folder_options,
-                index=0,
-                help="Choose folder to search in, or search all folders"
-            )
+            # Create two columns for side-by-side selection
+            selection_col1, selection_col2 = st.columns(2)
             
-            # Contract selection based on folder
-            if selected_folder == "All Folders":
-                contract_options = ["All Contracts"] + documents
-                available_docs = documents
-            else:
-                folder_docs = documents_by_folder[selected_folder]
-                contract_options = ["All in Folder"] + folder_docs
-                available_docs = folder_docs
+            with selection_col1:
+                # Folder selection first
+                folder_options = ["All Folders"] + list(documents_by_folder.keys())
+                selected_folder = st.selectbox(
+                    "📁 Select Folder:",
+                    options=folder_options,
+                    index=0,
+                    help="Choose folder to search in, or search all folders"
+                )
             
-            selected_contract = st.selectbox(
-                "🎯 Target Contract:",
-                options=contract_options,
-                index=0,
-                help="Select a specific contract or search all in selected scope"
-            )
+            with selection_col2:
+                # Contract selection based on folder
+                if selected_folder == "All Folders":
+                    contract_options = ["All Contracts"] + documents
+                    available_docs = documents
+                else:
+                    folder_docs = documents_by_folder[selected_folder]
+                    contract_options = ["All in Folder"] + folder_docs
+                    available_docs = folder_docs
+                
+                selected_contract = st.selectbox(
+                    "🎯 Target Contract:",
+                    options=contract_options,
+                    index=0,
+                    help="Select a specific contract or search all in selected scope"
+                )
             
             # Show selection status
             if selected_folder == "All Folders":
