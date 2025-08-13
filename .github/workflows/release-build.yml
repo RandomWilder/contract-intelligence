@@ -36,14 +36,35 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install macOS system dependencies
+    - name: Setup macOS environment and dependencies
       if: matrix.os == 'macos-latest'
       run: |
-        echo "Installing macOS-specific dependencies..."
+        echo "Setting up macOS 15 environment..."
+        
+        # Detect architecture and set paths
+        if [[ $(uname -m) == "arm64" ]]; then
+          HOMEBREW_PREFIX="/opt/homebrew"
+        else
+          HOMEBREW_PREFIX="/usr/local"
+        fi
+        
+        # Install gettext
         brew update
         brew install gettext
         brew link --force gettext
-        echo "gettext/libintl installed and linked"
+        
+        # Set environment variables for this session and future steps
+        echo "HOMEBREW_PREFIX=$HOMEBREW_PREFIX" >> $GITHUB_ENV
+        echo "PATH=$HOMEBREW_PREFIX/bin:$PATH" >> $GITHUB_ENV
+        echo "LDFLAGS=-L$HOMEBREW_PREFIX/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$HOMEBREW_PREFIX/include" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$HOMEBREW_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
+        
+        # Create compatibility symlinks for old paths
+        sudo mkdir -p /usr/local/opt/gettext/lib
+        sudo ln -sf $HOMEBREW_PREFIX/lib/libintl.* /usr/local/opt/gettext/lib/
+        
+        echo "macOS environment configured for $(uname -m) architecture"
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v5
@@ -63,20 +84,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements_desktop.txt
-
-    - name: Set macOS build environment
-      if: matrix.os == 'macos-latest'
-      run: |
-        echo "Setting up macOS build environment..."
-        export PATH="/opt/homebrew/bin:$PATH"
-        export LDFLAGS="-L/opt/homebrew/lib $LDFLAGS"
-        export CPPFLAGS="-I/opt/homebrew/include $CPPFLAGS"
-        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-        echo "PATH=/opt/homebrew/bin:$PATH" >> $GITHUB_ENV
-        echo "LDFLAGS=-L/opt/homebrew/lib" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I/opt/homebrew/include" >> $GITHUB_ENV
-        echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
-        echo "macOS environment configured"
 
     - name: Build desktop application
       run: python build_desktop.py
