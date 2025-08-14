@@ -1,0 +1,512 @@
+[1mdiff --git a/build_desktop.py b/build_desktop.py[m
+[1mindex fd49ce1d4..4dd99e4c4 100644[m
+[1m--- a/build_desktop.py[m
+[1m+++ b/build_desktop.py[m
+[36m@@ -33,6 +33,8 @@[m [madded_files = [[m
+     (str(spec_dir / 'local_rag_app.py'), '.'),[m
+     (str(spec_dir / 'contract_intelligence.py'), '.'),[m
+     (str(spec_dir / 'simple_ocr.py'), '.'),[m
+[32m+[m[32m    (str(spec_dir / 'desktop_launcher.py'), '.'),[m
+[32m+[m[32m    (str(spec_dir / 'telemetry_client.py'), '.'),[m
+     # Add any other Python files your app needs[m
+ ][m
+ [m
+[36m@@ -55,6 +57,8 @@[m [ma = Analysis([m
+         'streamlit.runtime.scriptrunner',[m
+         'streamlit.runtime.state',[m
+         'chromadb',[m
+[32m+[m[32m        'chromadb.utils.embedding_functions',[m
+[32m+[m[32m        'chromadb.utils.embedding_functions.openai_embedding_function',[m
+         'openai',[m
+         'google.auth',[m
+         'google_auth_oauthlib',[m
+[36m@@ -72,6 +76,7 @@[m [ma = Analysis([m
+         'pandas',[m
+         'pytz',[m
+         'tzdata',[m
+[32m+[m[32m        'keyring',[m
+     ],[m
+     hookspath=[],[m
+     hooksconfig={},[m
+[36m@@ -129,14 +134,14 @@[m [mif sys.platform == 'darwin':[m
+         name='Contract Intelligence.app',[m
+         icon='icon.icns' if os.path.exists('icon.icns') else None,[m
+         bundle_identifier='com.yourcompany.contractintelligence',[m
+[31m-        version='1.0.0',[m
+[32m+[m[32m        version='1.4.5',[m
+         info_plist={[m
+             'NSHighResolutionCapable': 'True',[m
+             'CFBundleDisplayName': 'Contract Intelligence Platform',[m
+             'CFBundleExecutable': 'ContractIntelligence',[m
+             'CFBundleName': 'Contract Intelligence',[m
+[31m-            'CFBundleVersion': '1.0.0',[m
+[31m-            'CFBundleShortVersionString': '1.0.0',[m
+[32m+[m[32m            'CFBundleVersion': '1.4.5',[m
+[32m+[m[32m            'CFBundleShortVersionString': '1.4.5',[m
+         },[m
+     )[m
+ '''[m
+[1mdiff --git a/builtin_rag_app.py b/builtin_rag_app.py[m
+[1mdeleted file mode 100644[m
+[1mindex b64bdfd30..000000000[m
+[1m--- a/builtin_rag_app.py[m
+[1m+++ /dev/null[m
+[36m@@ -1,304 +0,0 @@[m
+[31m-# builtin_rag_app.py - RAGFlow Native Backend[m
+[31m-import os[m
+[31m-import sys[m
+[31m-import chromadb[m
+[31m-from pathlib import Path[m
+[31m-from typing import List, Dict, Any, Optional[m
+[31m-import hashlib[m
+[31m-import json[m
+[31m-from datetime import datetime[m
+[31m-from chromadb.config import Settings[m
+[31m-import numpy as np[m
+[31m-[m
+[31m-# Optional OpenCV import - handle gracefully if not available[m
+[31m-try:[m
+[31m-    import cv2  # type: ignore[m
+[31m-    CV2_AVAILABLE = True[m
+[31m-except ImportError:[m
+[31m-    CV2_AVAILABLE = False[m
+[31m-[m
+[31m-# Add RAGFlow modules to path[m
+[31m-sys.path.append(os.path.dirname(os.path.abspath(__file__)))[m
+[31m-[m
+[31m-# Import only essential RAGFlow components we actually need[m
+[31m-# Skip complex imports that require too many dependencies[m
+[31m-try:[m
+[31m-    from deepdoc.vision.ocr import OCR[m
+[31m-    OCR_AVAILABLE = True[m
+[31m-except ImportError as e:[m
+[31m-    print(f"OCR not available: {e}")[m
+[31m-    OCR_AVAILABLE = False[m
+[31m-[m
+[31m-# Use simple document processing instead of complex RAGFlow parsers[m
+[31m-import PyPDF2[m
+[31m-import docx[m
+[31m-from openai import OpenAI[m
+[31m-[m
+[31m-class RAGFlowBuiltinEngine:[m
+[31m-    """RAGFlow engine using only built-in capabilities - no external APIs"""[m
+[31m-    [m
+[31m-    def __init__(self, chat_model="gpt-4o-mini"):[m
+[31m-        self.chat_model = chat_model[m
+[31m-        self.openai_api_key = os.getenv("OPENAI_API_KEY")[m
+[31m-        [m
+[31m-        if not self.openai_api_key:[m
+[31m-            raise ValueError("OPENAI_API_KEY environment variable is required")[m
+[31m-        [m
+[31m-        # Initialize built-in OCR if available (free, supports Hebrew/RTL)[m
+[31m-        if OCR_AVAILABLE:[m
+[31m-            try:[m
+[31m-                self.ocr_engine = OCR()[m
+[31m-                print("✅ Built-in OCR initialized (supports Hebrew/RTL)")[m
+[31m-            except Exception as e:[m
+[31m-                print(f"⚠️ Built-in OCR initialization failed: {e}")[m
+[31m-                self.ocr_engine = None[m
+[31m-        else:[m
+[31m-            print("⚠️ Built-in OCR not available - using fallback methods")[m
+[31m-            self.ocr_engine = None[m
+[31m-        [m
+[31m-        # Initialize ChromaDB with separate collection for built-in app[m
+[31m-        self.chroma_client = chromadb.PersistentClient([m
+[31m-            path="./data/chroma_builtin",  # Separate DB to avoid conflicts[m
+[31m-            settings=Settings([m
+[31m-                anonymized_telemetry=False,[m
+[31m-                allow_reset=True[m
+[31m-            )[m
+[31m-        )[m
+[31m-        [m
+[31m-        # Create collection for built-in app[m
+[31m-        self.collection = self.chroma_client.get_or_create_collection([m
+[31m-            name="contracts_builtin",[m
+[31m-            metadata={"hnsw:space": "cosine"}[m
+[31m-        )[m
+[31m-        [m
+[31m-        # Use simple OpenAI client (reliable and works)[m
+[31m-        self.openai_client = OpenAI(api_key=self.openai_api_key)[m
+[31m-        [m
+[31m-        print("✅ RAGFlow Built-in Engine initialized")[m
+[31m-        print(f"   - OCR: {'Available' if self.ocr_engine else 'Fallback methods'}")[m
+[31m-        print(f"   - Parsers: Simple PDF/DOCX (no complex dependencies)")[m
+[31m-        print(f"   - Database: ./data/chroma_builtin")[m
+[31m-        print(f"   - LLM: OpenAI {chat_model}")[m
+[31m-    [m
+[31m-    def extract_text_from_file(self, file_path: str, use_advanced_parsing: bool = False) -> str:[m
+[31m-        """Extract text using RAGFlow's built-in parsers and OCR"""[m
+[31m-        file_path = Path(file_path)[m
+[31m-        text = ""[m
+[31m-        [m
+[31m-        try:[m
+[31m-            if file_path.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:[m
+[31m-                # Image files - use built-in OCR[m
+[31m-                if self.ocr_engine and CV2_AVAILABLE:[m
+[31m-                    img = cv2.imread(str(file_path))[m
+[31m-                    if img is not None:[m
+[31m-                        ocr_result = self.ocr_engine(img)[m
+[31m-                        if ocr_result:[m
+[31m-                            text = "\n".join([result[1][0] for result in ocr_result if result[1][1] > 0.5])[m
+[31m-                    else:[m
+[31m-                        raise ValueError("Could not load image file")[m
+[31m-                elif not CV2_AVAILABLE:[m
+[31m-                    raise ValueError("OpenCV (cv2) not available for image processing")[m
+[31m-                else:[m
+[31m-                    raise ValueError("Built-in OCR not available")[m
+[31m-            [m
+[31m-            elif file_path.suffix.lower() == '.pdf':[m
+[31m-                if use_advanced_parsing:[m
+[31m-                    # Use RAGFlow's advanced PDF parser (laws parser for contracts)[m
+[31m-                    try:[m
+[31m-                        chunks = laws.chunk(str(file_path), lang="English")[m
+[31m-                        text = "\n\n".join([chunk.get("content_with_weight", "") for chunk in chunks if chunk.get("content_with_weight")])[m
+[31m-                    except Exception as e:[m
+[31m-                        print(f"Advanced parsing failed, falling back to naive: {e}")[m
+[31m-                        chunks = naive.chunk(str(file_path), lang="English")[m
+[31m-                        text = "\n\n".join([chunk.get("content_with_weight", "") for chunk in chunks if chunk.get("content_with_weight")])[m
+[31m-                else:[m
+[31m-                    # Use basic PDF parser[m
+[31m-                    with open(file_path, 'rb') as file:[m
+[31m-                        binary = file.read()[m
+[31m-                    chunks = naive.chunk(str(file_path), binary=binary, lang="English")[m
+[31m-                    text = "\n\n".join([chunk.get("content_with_weight", "") for chunk in chunks if chunk.get("content_with_weight")])[m
+[31m-            [m
+[31m-            elif file_path.suffix.lower() == '.docx':[m
+[31m-                # Use built-in DOCX parser[m
+[31m-                with open(file_path, 'rb') as file:[m
+[31m-                    binary = file.read()[m
+[31m-                sections, tables = self.docx_parser(str(file_path), binary)[m
+[31m-                text = "\n".join([section for section, _ in sections if section])[m
+[31m-                # Add table content[m
+[31m-                for table, _ in tables:[m
+[31m-                    if table:[m
+[31m-                        text += f"\n\nTable:\n{table[1] if isinstance(table, tuple) else str(table)}"[m
+[31m-            [m
+[31m-            elif file_path.suffix.lower() == '.txt':[m
+[31m-                # Use built-in TXT parser[m
+[31m-                with open(file_path, 'r', encoding='utf-8') as file:[m
+[31m-                    text = file.read()[m
+[31m-            [m
+[31m-            else:[m
+[31m-                raise ValueError(f"Unsupported file type: {file_path.suffix}")[m
+[31m-                [m
+[31m-        except Exception as e:[m
+[31m-            print(f"Error extracting text from {file_path}: {e}")[m
+[31m-            # Fallback to simple text extraction[m
+[31m-            if file_path.suffix.lower() == '.txt':[m
+[31m-                with open(file_path, 'r', encoding='utf-8') as file:[m
+[31m-                    text = file.read()[m
+[31m-        [m
+[31m-        return text.strip()[m
+[31m-    [m
+[31m-    def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:[m
+[31m-        """Split text into overlapping chunks using RAGFlow's tokenizer"""[m
+[31m-        if not text:[m
+[31m-            return [][m
+[31m-        [m
+[31m-        # Use RAGFlow's built-in tokenizer[m
+[31m-        tokens = rag_tokenizer.tokenize(text)[m
+[31m-        words = tokens.split() if isinstance(tokens, str) else tokens[m
+[31m-        [m
+[31m-        chunks = [][m
+[31m-        start = 0[m
+[31m-        [m
+[31m-        while start < len(words):[m
+[31m-            end = start + chunk_size[m
+[31m-            chunk_words = words[start:end][m
+[31m-            chunk_text = " ".join(chunk_words) if isinstance(chunk_words, list) else str(chunk_words)[m
+[31m-            [m
+[31m-            if chunk_text.strip():[m
+[31m-                chunks.append(chunk_text.strip())[m
+[31m-            [m
+[31m-            start = end - overlap[m
+[31m-            if start >= len(words):[m
+[31m-                break[m
+[31m-        [m
+[31m-        return chunks if chunks else [text]  # Fallback to original text[m
+[31m-    [m
+[31m-    def add_document(self, file_path: str, use_advanced_parsing: bool = False) -> bool:[m
+[31m-        """Add document to vector store using built-in processing"""[m
+[31m-        try:[m
+[31m-            # Extract text using built-in parsers[m
+[31m-            text = self.extract_text_from_file(file_path, use_advanced_parsing)[m
+[31m-            [m
+[31m-            if not text or len(text.strip()) < 10:[m
+[31m-                print(f"⚠️ No meaningful text extracted from {file_path}")[m
+[31m-                return False[m
+[31m-            [m
+[31m-            # Create document chunks[m
+[31m-            chunks = self.chunk_text(text)[m
+[31m-            [m
+[31m-            if not chunks:[m
+[31m-                print(f"⚠️ No chunks created from {file_path}")[m
+[31m-                return False[m
+[31m-            [m
+[31m-            # Generate document ID[m
+[31m-            doc_id = hashlib.md5(f"{file_path}_{datetime.now()}".encode()).hexdigest()[m
+[31m-            [m
+[31m-            # Prepare data for ChromaDB[m
+[31m-            documents = [][m
+[31m-            metadatas = [][m
+[31m-            ids = [][m
+[31m-            [m
+[31m-            for i, chunk in enumerate(chunks):[m
+[31m-                chunk_id = f"{doc_id}_chunk_{i}"[m
+[31m-                [m
+[31m-                documents.append(chunk)[m
+[31m-                metadatas.append({[m
+[31m-                    "source": str(file_path),[m
+[31m-                    "chunk_index": i,[m
+[31m-                    "doc_id": doc_id,[m
+[31m-                    "parsing_method": "advanced" if use_advanced_parsing else "basic",[m
+[31m-                    "timestamp": datetime.now().isoformat(),[m
+[31m-                    "engine": "ragflow_builtin"[m
+[31m-                })[m
+[31m-                ids.append(chunk_id)[m
+[31m-            [m
+[31m-            # Add to ChromaDB (it will handle embedding automatically)[m
+[31m-            self.collection.add([m
+[31m-                documents=documents,[m
+[31m-                metadatas=metadatas,[m
+[31m-                ids=ids[m
+[31m-            )[m
+[31m-            [m
+[31m-            print(f"✅ Added document: {Path(file_path).name}")[m
+[31m-            print(f"   - Chunks: {len(chunks)}")[m
+[31m-            print(f"   - Parsing: {'Advanced (Laws)' if use_advanced_parsing else 'Basic (Naive)'}")[m
+[31m-            print(f"   - Text length: {len(text)} characters")[m
+[31m-            [m
+[31m-            return True[m
+[31m-            [m
+[31m-        except Exception as e:[m
+[31m-            print(f"❌ Error adding document {file_path}: {e}")[m
+[31m-            return False[m
+[31m-    [m
+[31m-    def search_documents(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:[m
+[31m-        """Search documents using built-in capabilities"""[m
+[31m-        try:[m
+[31m-            if not query.strip():[m
+[31m-                return [][m
+[31m-            [m
+[31m-            # Query the collection[m
+[31m-            results = self.collection.query([m
+[31m-                query_texts=[query],[m
+[31m-                n_results=top_k,[m
+[31m-                include=["documents", "metadatas", "distances"][m
+[31m-            )[m
+[31m-            [m
+[31m-            # Format results[m
+[31m-            search_results = [][m
+[31m-            [m
+[31m-            if results["documents"] and results["documents"][0]:[m
+[31m-                for i, (doc, metadata, distance) in enumerate(zip([m
+[31m-                    results["documents"][0],[m
+[31m-                    results["metadatas"][0],[m
+[31m-                    results["distances"][0][m
+[31m-                )):[m
+[31m-                    search_results.append({[m
+[31m-                        "content": doc,[m
+[31m-                        "metadata": metadata,[m
+[31m-                        "similarity": 1 - distance,  # Convert distance to similarity[m
+[31m-                        "rank": i + 1[m
+[31m-                    })[m
+[31m-            [m
+[31m-            return search_results[m
+[31m-            [m
+[31m-        except Exception as e:[m
+[31m-            print(f"❌ Search error: {e}")[m
+[31m-            return [][m
+[31m-    [m
+[31m-    def get_collection_stats(self) -> Dict[str, Any]:[m
+[31m-        """Get statistics about the document collection"""[m
+[31m-        try:[m
+[31m-            count = self.collection.count()[m
+[31m-            return {[m
+[31m-                "total_chunks": count,[m
+[31m-                "collection_name": "contracts_builtin",[m
+[31m-                "engine": "RAGFlow Built-in",[m
+[31m-                "database_path": "./data/chroma_builtin"[m
+[31m-            }[m
+[31m-        except Exception as e:[m
+[31m-            print(f"Error getting stats: {e}")[m
+[31m-            return {"total_chunks": 0, "error": str(e)}[m
+[31m-    [m
+[31m-    def clear_collection(self) -> bool:[m
+[31m-        """Clear all documents from collection"""[m
+[31m-        try:[m
+[31m-            # Delete the collection and recreate it[m
+[31m-            self.chroma_client.delete_collection("contracts_builtin")[m
+[31m-            self.collection = self.chroma_client.get_or_create_collection([m
+[31m-                name="contracts_builtin",[m
+[31m-                metadata={"hnsw:space": "cosine"}[m
+[31m-            )[m
+[31m-            print("✅ Collection cleared")[m
+[31m-            return True[m
+[31m-        except Exception as e:[m
+[31m-            print(f"❌ Error clearing collection: {e}")[m
+[31m-            return False[m
+[31m-[m
+[31m-# Test the engine[m
+[31m-if __name__ == "__main__":[m
+[31m-    print("🚀 Testing RAGFlow Built-in Engine...")[m
+[31m-    engine = RAGFlowBuiltinEngine()[m
+[31m-    [m
+[31m-    stats = engine.get_collection_stats()[m
+[31m-    print(f"📊 Collection stats: {stats}")[m
+[31m-    [m
+[31m-    print("✅ RAGFlow Built-in Engine ready!")[m
+[1mdiff --git a/builtin_rag_app_simple.py b/builtin_rag_app_simple.py[m
+[1mdeleted file mode 100644[m
+[1mindex 997385b15..000000000[m
+[1m--- a/builtin_rag_app_simple.py[m
+[1m+++ /dev/null[m
+[36m@@ -1,478 +0,0 @@[m
+[31m-# builtin_rag_app_simple.py - Simplified RAGFlow Backend[m
+[31m-import os[m
+[31m-import sys[m
+[31m-import chromadb[m
+[31m-from pathlib import Path[m
+[31m-from typing import List, Dict, Any, Optional[m
+[31m-import hashlib[m
+[31m-import json[m
+[31m-from datetime import datetime[m
+[31m-from chromadb.config import Settings[m
+[31m-import numpy as np[m
+[31m-from dotenv import load_dotenv[m
+[31m-[m
+[31m-# Load environment variables from .env file[m
+[31m-load_dotenv()[m
+[31m-[m
+[31m-# Optional OpenCV import - handle gracefully if not available[m
+[31m-try:[m
+[31m-    import cv2  # type: ignore[m
+[31m-    CV2_AVAILABLE = True[m
+[31m-except ImportError:[m
+[31m-    CV2_AVAILABLE = False[m
+[31m-[m
+[31m-# Simple document processing imports[m
+[31m-import PyPDF2[m
+[31m-import docx[m
+[31m-from openai import OpenAI[m
+[31m-[m
+[31m-# Use our simple OCR instead of complex RAGFlow dependencies[m
+[31m-OCR_AVAILABLE = False[m
+[31m-try:[m
+[31m-    from simple_ocr import SimpleOCR[m
+[31m-    OCR_AVAILABLE = True[m
+[31m-    print("✅ Simple OCR available")[m
+[31m-except ImportError as e:[m
+[31m-    print(f"ℹ️ Simple OCR not available: {e}")[m
+[31m-[m
+[31m-class RAGFlowBuiltinEngine:[m
+[31m-    """Simplified RAGFlow engine - built-in OCR when available, simple parsing otherwise"""[m
+[31m-    [m
+[31m-    def __init__(self, chat_model="gpt-4o-mini"):[m
+[31m-        self.chat_model = chat_model[m
+[31m-        self.openai_api_key = os.getenv("OPENAI_API_KEY")[m
+[31m-        [m
+[31m-        if not self.openai_api_key:[m
+[31m-            raise ValueError("OPENAI_API_KEY environment variable is required")[m
+[31m-        [m
+[31m-        # Initialize simple OCR if available (supports Hebrew/RTL)[m
+[31m-        if OCR_AVAILABLE:[m
+[31m-            try:[m
+[31m-                self.ocr_engine = SimpleOCR()[m
+[31m-                if self.ocr_engine.is_available():[m
+[31m-                    print("✅ Simple OCR initialized (supports Hebrew/RTL)")[m
+[31m-                else:[m
+[31m-                    print("⚠️ Simple OCR failed to initialize")[m
+[31m-                    self.ocr_engine = None[m
+[31m-            except Exception as e:[m
+[31m-                print(f"⚠️ Simple OCR initialization failed: {e}")[m
+[31m-                self.ocr_engine = None[m
+[31m-        else:[m
+[31m-            self.ocr_engine = None[m
+[31m-        [m
+[31m-        # Initialize ChromaDB with separate collection for built-in app[m
+[31m-        self.chroma_client = chromadb.PersistentClient([m
+[31m-            path="./data/chroma_builtin",  # Separate DB to avoid conflicts[m
+[31m-            settings=Settings([m
+[31m-                anonymized_telemetry=False,[m
+[31m-                allow_reset=True[m
+[31m-            )[m
+[31m-        )[m
+[31m-        [m
+[31m-        # Create collection for built-in app[m
+[31m-        self.collection = self.chroma_client.get_or_create_collection([m
+[31m-            name="contracts_builtin",[m
+[31m-            metadata={"hnsw:space": "cosine"}[m
+[31m-        )[m
+[31m-        [m
+[31m-        # Use simple OpenAI client (reliable and works)[m
+[31m-        self.openai_client = OpenAI(api_key=self.openai_api_key)[m
+[31m-        [m
+[31m-        print("✅ Simplified RAGFlow Engine initialized")[m
+[31m-        print(f"   - OCR: {'Available' if self.ocr_engine else 'Simple text extraction only'}")[m
+[31m-        print(f"   - Parsers: Simple PDF/DOCX (PyPDF2, python-docx)")[m
+[31m-        print(f"   - Database: ./data/chroma_builtin")[m
+[31m-        print(f"   - LLM: OpenAI {chat_model}")[m
+[31m-    [m
+[31m-    def extract_text_from_file(self, file_path: str, use_advanced_parsing: bool = False) -> str:[m
+[31m-        """Extract text using simple parsers and built-in OCR when available"""[m
+[31m-        file_path = Path(file_path)[m
+[31m-        text = ""[m
+[31m-        [m
+[31m-        try:[m
+[31m-            if file_path.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:[m
+[31m-                # Image files - use SimpleOCR[m
+[31m-                if self.ocr_engine:[m
+[31m-                    ocr_results = self.ocr_engine.extract_text_from_image(str(file_path))[m
+[31m-                    if ocr_results:[m
+[31m-                        text = "\\n".join([result[0] for result in ocr_results if result[1] > 0.5])[m
+[31m-                        if not text.strip():[m
+[31m-                            text = "No text detected in image"[m
+[31m-                    else:[m
+[31m-                        text = "No text detected in image"[m
+[31m-                else:[m
+[31m-                    text = "Error: OCR not available for image processing"[m
+[31m-            [m
+[31m-            elif file_path.suffix.lower() == '.pdf':[m
+[31m-                # Follow local_rag_app.py flow: try PyPDF2 first, auto-fallback to OCR[m
+[31m-                text = self._extract_text_from_pdf(file_path, use_advanced_parsing)[m
+[31m-            [m
+[31m-            elif file_path.suffix.lower() in ['.docx']:[m
+[31m-                # Simple DOCX processing using python-docx[m
+[31m-                try:[m
+[31m-                    doc = docx.Document(file_path)[m
+[31m-                    text_parts = [][m
+[31m-                    for paragraph in doc.paragraphs:[m
+[31m-                        if paragraph.text.strip():[m
+[31m-                            text_parts.append(paragraph.text)[m
+[31m-                    text = "\\n".join(text_parts)[m
+[31m-                    if not text.strip():[m
+[31m-                        text = "No text extracted from DOCX"[m
+[31m-                except Exception as e:[m
+[31m-                    text = f"Error processing DOCX: {str(e)}"[m
+[31m-            [m
+[31m-            elif file_path.suffix.lower() == '.txt':[m
+[31m-                # Simple text file processing[m
+[31m-                try:[m
+[31m-                    with open(file_path, 'r', encoding='utf-8') as file:[m
+[31m-                        text = file.read()[m
+[31m-                except UnicodeDecodeError:[m
+[31m-                    # Try different encodings[m
+[31m-                    for encoding in ['latin1', 'cp1252', 'iso-8859-1']:[m
+[31m-                        try:[m
+[31m-                            with open(file_path, 'r', encoding=encoding) as file:[m
+[31m-                                text = file.read()[m
+[31m-                            break[m
+[31m-                        except UnicodeDecodeError:[m
+[31m-                            continue[m
+[31m-                    else:[m
+[31m-                        text = "Error: Could not decode text file"[m
+[31m-                except Exception as e:[m
+[31m-                    text = f"Error processing text file: {str(e)}"[m
+[31m-            [m
+[31m-            else:[m
+[31m-                text = f"Unsupported file type: {file_path.suffix}"[m
+[31m-                [m
+[31m-        except Exception as e:[m
+[31m-            print(f"Error extracting text from {file_path}: {e}")[m
+[31m-        

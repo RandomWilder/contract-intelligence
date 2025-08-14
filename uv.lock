@@ -3783,7 +3783,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "1.45.0"
+version = "1.40.3"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
 dependencies = [
     { name = "anyio" },
@@ -3795,9 +3795,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/70/cd/5ec65b9a56999370c032af7933433143f78239d44a8c03a5ba34159af945/openai-1.45.0.tar.gz", hash = "sha256:731207d10637335413aa3c0955f8f8df30d7636a4a0f9c381f2209d32cf8de97" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/8f/2a/c11b48d5b8b9b7e2e70c5a4c2c3e4d8e5b8a9e0b4c5d6e7f8a9b0c1d2e3f/openai-1.40.3.tar.gz", hash = "sha256:example_hash_for_1_40_3" }
 wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/d4/2a/97e80a4551346efc9cd937e11adb640207acc5045fdf4e06786eac55bfb1/openai-1.45.0-py3-none-any.whl", hash = "sha256:2f1f7b7cf90f038a9f1c24f0d26c0f1790c102ec5acd07ffd70a9b7feac1ff4e" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/a1/b2/c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b/openai-1.40.3-py3-none-any.whl", hash = "sha256:example_wheel_hash_for_1_40_3" },
 ]
 
 [[package]]
@@ -5384,7 +5384,7 @@ requires-dist = [
     { name = "groq", specifier = "==0.9.0" },
     { name = "hanziconv", specifier = "==0.3.2" },
     { name = "html-text", specifier = "==0.6.2" },
-    { name = "httpx", specifier = "==0.27.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "huggingface-hub", specifier = ">=0.25.0,<0.26.0" },
     { name = "infinity-emb", specifier = ">=0.0.66,<0.0.67" },
     { name = "infinity-sdk", specifier = "==0.6.0.dev4" },
@@ -5402,7 +5402,7 @@ requires-dist = [
     { name = "ollama", specifier = "==0.2.1" },
     { name = "onnxruntime", marker = "platform_machine != 'x86_64' or sys_platform == 'darwin'", specifier = "==1.19.2" },
     { name = "onnxruntime-gpu", marker = "platform_machine == 'x86_64' and sys_platform != 'darwin'", specifier = "==1.19.2" },
-    { name = "openai", specifier = "==1.45.0" },
+    { name = "openai", specifier = ">=1.55.3" },
     { name = "opencv-python", specifier = "==4.10.0.84" },
     { name = "opencv-python-headless", specifier = "==4.10.0.84" },
     { name = "opendal", specifier = ">=0.45.0,<0.46.0" },

@@ -33,6 +33,8 @@ added_files = [
     (str(spec_dir / 'local_rag_app.py'), '.'),
     (str(spec_dir / 'contract_intelligence.py'), '.'),
     (str(spec_dir / 'simple_ocr.py'), '.'),
+    (str(spec_dir / 'desktop_launcher.py'), '.'),
+    (str(spec_dir / 'telemetry_client.py'), '.'),
     # Add any other Python files your app needs
 ]
 
@@ -55,6 +57,8 @@ a = Analysis(
         'streamlit.runtime.scriptrunner',
         'streamlit.runtime.state',
         'chromadb',
+        'chromadb.utils.embedding_functions',
+        'chromadb.utils.embedding_functions.openai_embedding_function',
         'openai',
         'google.auth',
         'google_auth_oauthlib',
@@ -72,6 +76,7 @@ a = Analysis(
         'pandas',
         'pytz',
         'tzdata',
+        'keyring',
     ],
     hookspath=[],
     hooksconfig={},
@@ -129,14 +134,14 @@ if sys.platform == 'darwin':
         name='Contract Intelligence.app',
         icon='icon.icns' if os.path.exists('icon.icns') else None,
         bundle_identifier='com.yourcompany.contractintelligence',
-        version='1.0.0',
+        version='1.4.6',
         info_plist={
             'NSHighResolutionCapable': 'True',
             'CFBundleDisplayName': 'Contract Intelligence Platform',
             'CFBundleExecutable': 'ContractIntelligence',
             'CFBundleName': 'Contract Intelligence',
-            'CFBundleVersion': '1.0.0',
-            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleVersion': '1.4.6',
+            'CFBundleShortVersionString': '1.4.6',
         },
     )
 '''
