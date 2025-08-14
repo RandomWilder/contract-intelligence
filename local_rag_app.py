@@ -343,11 +343,22 @@ class LocalRAGFlow:
             model_name="text-embedding-ada-002"
         )
         
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="contracts",
-            embedding_function=openai_ef,
-            metadata={"hnsw:space": "cosine"}
-        )
+        # Try to get existing collection first, if it fails, create new one
+        try:
+            self.collection = self.chroma_client.get_collection(name="contracts")
+        except:
+            # Collection doesn't exist or has issues, create new one with OpenAI embeddings
+            try:
+                # Delete old collection if it exists with wrong embedding function
+                self.chroma_client.delete_collection(name="contracts")
+            except:
+                pass
+            
+            self.collection = self.chroma_client.create_collection(
+                name="contracts",
+                embedding_function=openai_ef,
+                metadata={"hnsw:space": "cosine"}
+            )
         
         # Initialize Google services
         self.auth_manager = GoogleAuthManager()
