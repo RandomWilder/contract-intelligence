@@ -195,12 +195,48 @@ class ContractIntelligenceSetup:
             except Exception as e:
                 self.status_var.set(f"❌ Error loading config: {e}")
     
+    def validate_openai_key(self, api_key):
+        """Validate OpenAI API key with specific error messages"""
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            
+            # Test with a simple API call
+            response = client.models.list()
+            return True, "Valid API key"
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            
+            if "invalid api key" in error_str or "unauthorized" in error_str:
+                return False, "Invalid OpenAI API key. Please check your key and try again."
+            elif "rate limit" in error_str or "429" in error_str:
+                return False, "OpenAI rate limit exceeded. Please check your usage limits or try again later."
+            elif "insufficient" in error_str and "credit" in error_str:
+                return False, "OpenAI account has insufficient credits. Please add credits to your account."
+            elif "quota" in error_str or "billing" in error_str:
+                return False, "OpenAI billing issue. Please check your account billing status."
+            elif "network" in error_str or "connection" in error_str:
+                return False, "Cannot connect to OpenAI. Please check your internet connection."
+            else:
+                return False, f"OpenAI API error: {str(e)}"
+
     def save_config(self):
         """Save configuration to file"""
         try:
             # Validate inputs
             if not self.openai_key_var.get().strip():
                 messagebox.showerror("Error", "Please enter your OpenAI API Key")
+                return
+            
+            # Validate OpenAI API key
+            self.status_var.set("🔍 Validating OpenAI API key...")
+            self.root.update()
+            
+            is_valid, message = self.validate_openai_key(self.openai_key_var.get().strip())
+            if not is_valid:
+                messagebox.showerror("OpenAI API Key Error", message)
+                self.status_var.set("❌ Invalid OpenAI API key")
                 return
             
             if not self.google_cred_var.get().strip():
