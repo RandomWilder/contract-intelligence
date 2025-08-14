@@ -134,14 +134,14 @@ if sys.platform == 'darwin':
         name='Contract Intelligence.app',
         icon='icon.icns' if os.path.exists('icon.icns') else None,
         bundle_identifier='com.yourcompany.contractintelligence',
-        version='1.4.9',
+        version='1.4.10',
         info_plist={
             'NSHighResolutionCapable': 'True',
             'CFBundleDisplayName': 'Contract Intelligence Platform',
             'CFBundleExecutable': 'ContractIntelligence',
             'CFBundleName': 'Contract Intelligence',
-            'CFBundleVersion': '1.4.9',
-            'CFBundleShortVersionString': '1.4.9',
+            'CFBundleVersion': '1.4.10',
+            'CFBundleShortVersionString': '1.4.10',
         },
     )
 '''

@@ -309,7 +309,7 @@ class ContractIntelligenceSetup:
                 config = json.load(f)
             
             os.environ['OPENAI_API_KEY'] = config['openai_api_key']
-            from local_rag_app import get_google_credentials_path
+            from utils import get_google_credentials_path
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(get_google_credentials_path())
             
             self.status_var.set("🚀 Launching application...")
