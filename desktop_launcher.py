@@ -249,7 +249,7 @@ class ContractIntelligenceSetup:
                 messagebox.showerror("Error", "Google credentials file not found")
                 return
             
-            from local_rag_app import get_google_credentials_path
+            from utils import get_google_credentials_path
             google_cred_dest = get_google_credentials_path()
             import shutil
             shutil.copy2(google_cred_source, google_cred_dest)

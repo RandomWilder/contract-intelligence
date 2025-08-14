@@ -22,22 +22,7 @@ from datetime import datetime
 
 load_dotenv()
 
-def get_google_credentials_path():
-    """Get the path to Google credentials file in user's home directory"""
-    import os
-    home_dir = os.path.expanduser("~")
-    credentials_dir = os.path.join(home_dir, ".contract_intelligence")
-    os.makedirs(credentials_dir, exist_ok=True)
-    new_path = os.path.join(credentials_dir, "google_credentials.json")
-    
-    # Migration: Check if old file exists and move it
-    old_path = "google_credentials.json"
-    if os.path.exists(old_path) and not os.path.exists(new_path):
-        import shutil
-        shutil.move(old_path, new_path)
-        print(f"✅ Migrated Google credentials to secure location: {new_path}")
-    
-    return new_path
+from utils import get_google_credentials_path
 
 class GoogleAuthManager:
     """Handles Google OAuth authentication and credential management"""
