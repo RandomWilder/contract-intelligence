@@ -329,16 +329,20 @@ class ContractIntelligenceSetup:
                     streamlit_app = app_dir / "streamlit_app.py"
                     
                     # Launch Streamlit with proper network binding for macOS
-                    subprocess.run([
+                    # Use Popen for non-blocking execution and 0.0.0.0 for better compatibility
+                    process = subprocess.Popen([
                         sys.executable, "-m", "streamlit", "run", 
                         str(streamlit_app),
                         "--server.headless=true",
-                        "--server.address=localhost",
+                        "--server.address=0.0.0.0",
                         "--server.port=8501",
                         "--browser.gatherUsageStats=false",
                         "--server.enableCORS=false",
                         "--server.enableXsrfProtection=false"
-                    ])
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    
+                    print(f"✅ Streamlit process started with PID: {process.pid}")
+                    print("🚀 Streamlit should be available at: http://localhost:8501")
                 except Exception as e:
                     messagebox.showerror("Launch Error", f"Failed to launch app: {e}")
                 finally:
