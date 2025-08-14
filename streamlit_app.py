@@ -333,6 +333,88 @@ def inject_rtl_css():
         animation: pulse 1.5s ease-in-out infinite !important;
     }
     
+    /* =========================
+       CHAT INTERFACE STYLING
+       ========================= */
+    
+    /* Chat container */
+    .chat-container {
+        height: 500px !important;
+        overflow-y: auto !important;
+        padding: 1rem !important;
+        border: 1px solid #e9ecef !important;
+        border-radius: 8px !important;
+        background: #f8f9fa !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Chat message bubbles */
+    .stChatMessage {
+        margin-bottom: 1rem !important;
+    }
+    
+    /* User message styling */
+    .stChatMessage[data-testid="user-message"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border-radius: 18px 18px 4px 18px !important;
+        margin-left: 20% !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Assistant message styling */
+    .stChatMessage[data-testid="assistant-message"] {
+        background: white !important;
+        color: #2c3e50 !important;
+        border: 1px solid #e9ecef !important;
+        border-radius: 18px 18px 18px 4px !important;
+        margin-left: 0 !important;
+        margin-right: 20% !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    
+    /* RTL chat message alignment */
+    .rtl-chat-user {
+        direction: rtl !important;
+        text-align: right !important;
+        margin-left: 0 !important;
+        margin-right: 20% !important;
+        border-radius: 18px 18px 18px 4px !important;
+    }
+    
+    .rtl-chat-assistant {
+        direction: rtl !important;
+        text-align: right !important;
+        margin-left: 20% !important;
+        margin-right: 0 !important;
+        border-radius: 18px 18px 4px 18px !important;
+    }
+    
+    /* Chat input styling */
+    .stChatInput > div {
+        border-radius: 25px !important;
+        border: 2px solid #667eea !important;
+        background: white !important;
+    }
+    
+    .stChatInput input {
+        padding: 0.8rem 1.2rem !important;
+        border-radius: 25px !important;
+        font-size: 0.9rem !important;
+    }
+    
+    /* Chat input RTL support */
+    .rtl-chat-input input {
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: bidi-override !important;
+    }
+    
+    /* Scroll to bottom animation */
+    .chat-scroll-target {
+        scroll-behavior: smooth !important;
+    }
+    
     </style>
     """, unsafe_allow_html=True)
 
@@ -343,6 +425,77 @@ def display_rtl_text(text, key=None):
     else:
         st.write(text)
 
+def initialize_chat_history():
+    """Initialize chat history in session state"""
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    if "chat_context" not in st.session_state:
+        st.session_state.chat_context = {}
+
+def add_chat_message(role, content, metadata=None):
+    """Add a message to chat history"""
+    message = {
+        "role": role,
+        "content": content,
+        "timestamp": time.time(),
+        "metadata": metadata or {}
+    }
+    st.session_state.chat_messages.append(message)
+
+def display_chat_message(message):
+    """Display a chat message with RTL support"""
+    role = message["role"]
+    content = message["content"]
+    
+    # Determine if content is RTL
+    is_rtl = detect_rtl(content)
+    
+    with st.chat_message(role):
+        if is_rtl:
+            # Apply RTL styling for RTL text
+            css_class = "rtl-chat-user" if role == "user" else "rtl-chat-assistant"
+            st.markdown(f'<div class="{css_class}">{content}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(content)
+        
+        # Display metadata if available (for assistant messages)
+        if role == "assistant" and message.get("metadata", {}).get("show_sources"):
+            metadata = message["metadata"]
+            with st.expander("📚 Source Information & Context", expanded=False):
+                if metadata.get("search_scope"):
+                    st.markdown(f"**🎯 Search Scope**: {metadata['search_scope']}")
+                
+                if metadata.get("source_contracts"):
+                    contracts = metadata["source_contracts"]
+                    if len(contracts) > 1:
+                        st.markdown(f"**📊 Results found in**: {', '.join(sorted(contracts))}")
+                    elif len(contracts) == 1:
+                        st.markdown(f"**📊 Results found in**: {list(contracts)[0]}")
+                
+                st.divider()
+                
+                # Display source chunks
+                if metadata.get("source_chunks"):
+                    for i, chunk_info in enumerate(metadata["source_chunks"]):
+                        st.write(f"**Source {i+1}** (Similarity: {chunk_info['score']:.2f})")
+                        st.write(f"📄 Document: {chunk_info['document_name']}")
+                        st.write(f"📁 Folder: {chunk_info.get('folder', 'General')}")
+                        st.write(f"🔧 Extraction: {chunk_info.get('extraction_method', 'standard').title()}")
+                        st.write(f"📝 Content Preview:")
+                        
+                        chunk_preview = chunk_info['content'][:500] + ("..." if len(chunk_info['content']) > 500 else "")
+                        
+                        if detect_rtl(chunk_preview):
+                            st.markdown(f'<div class="rtl-text" style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: 100px; overflow-y: auto;">{chunk_preview}</div>', unsafe_allow_html=True)
+                        else:
+                            st.text_area(
+                                f"Context {i+1}:",
+                                chunk_preview,
+                                height=100,
+                                key=f"chat_context_{message['timestamp']}_{i}"
+                            )
+                        st.divider()
+
 # Initialize RAGFlow
 @st.cache_resource
 def initialize_ragflow(chat_model="gpt-4o-mini"):
@@ -350,8 +503,6 @@ def initialize_ragflow(chat_model="gpt-4o-mini"):
 
 def handle_google_auth(rag):
     """Handle Google OAuth authentication using device flow"""
-    st.subheader("🔐 Google Services Setup")
-    
     from local_rag_app import get_google_credentials_path
     credentials_path = get_google_credentials_path()
     
@@ -429,6 +580,9 @@ def main():
     # Inject RTL CSS and modern styling first
     inject_rtl_css()
     
+    # Initialize chat history
+    initialize_chat_history()
+    
     # Centered header title and subtitle - pushed to top
     st.markdown("""
     <div style="text-align: center; margin-top: -2rem; margin-bottom: 1.5rem; padding-top: 0;">
@@ -501,8 +655,6 @@ def main():
     
     # Left column: Document Management & Google Auth
     with main_col1:
-        st.subheader("🔐 Authentication & Setup")
-        
         # Compact Google Authentication Section
         google_authenticated = handle_google_auth(rag)
         
@@ -603,13 +755,11 @@ def main():
         else:
             st.info("No documents yet")
     
-    # Right column: Query Interface
+    # Right column: Chat Interface
     with main_col2:
-        st.subheader("💬 Query Your Contracts")
+        st.subheader("💬 Chat with Your Contracts")
         
-
-    
-        # Contract Selection Interface - Side by side layout
+        # Contract Selection Interface - Compact layout above chat
         if documents:
             # Create two columns for side-by-side selection
             selection_col1, selection_col2 = st.columns(2)
@@ -657,72 +807,83 @@ def main():
             selected_folder = "All Folders"
             st.info("📤 Upload documents to start querying")
         
-        # Compact example queries
-        with st.expander("📝 Quick Questions"):
-            example_queries = [
-                "Key terms and conditions?",
-                "Who are the parties?",
-                "Contract duration?",
-                "Payment terms?",
-                "Termination clauses?",
-                "Penalty clauses?",
-                "IP terms?",
-                "Governing law?",
-                "Confidentiality?",
-                "Force majeure?"
-            ]
-            
-            # Create buttons in rows of 2 with compact layout
-            for i in range(0, len(example_queries), 2):
-                q_col1, q_col2 = st.columns(2)
+        # Chat controls
+        chat_controls_col1, chat_controls_col2 = st.columns([3, 1])
+        with chat_controls_col1:
+            # Quick Questions (compact)
+            with st.expander("📝 Quick Questions"):
+                example_queries = [
+                    "Key terms and conditions?",
+                    "Who are the parties?",
+                    "Contract duration?",
+                    "Payment terms?",
+                    "Termination clauses?",
+                    "Penalty clauses?",
+                    "IP terms?",
+                    "Governing law?",
+                    "Confidentiality?",
+                    "Force majeure?"
+                ]
                 
-                with q_col1:
-                    if i < len(example_queries):
-                        if st.button(example_queries[i], key=f"example_{i}"):
-                            st.session_state.query_input = example_queries[i]
-                
-                with q_col2:
-                    if i + 1 < len(example_queries):
-                        if st.button(example_queries[i + 1], key=f"example_{i+1}"):
-                            st.session_state.query_input = example_queries[i + 1]
-    
-        # Query input with RTL support
-        query = st.text_input(
-            "Ask a question:",
-            value=st.session_state.get("query_input", ""),
-            placeholder="e.g., What are the payment terms?",
-            key="main_query_input"
-        )
+                # Create buttons in rows of 2 with compact layout
+                for i in range(0, len(example_queries), 2):
+                    q_col1, q_col2 = st.columns(2)
+                    
+                    with q_col1:
+                        if i < len(example_queries):
+                            if st.button(example_queries[i], key=f"example_{i}"):
+                                # Add user message to chat
+                                add_chat_message("user", example_queries[i])
+                                st.rerun()
+                    
+                    with q_col2:
+                        if i + 1 < len(example_queries):
+                            if st.button(example_queries[i + 1], key=f"example_{i+1}"):
+                                # Add user message to chat
+                                add_chat_message("user", example_queries[i + 1])
+                                st.rerun()
         
-        # Apply RTL styling to input if needed
-        if query and detect_rtl(query):
-            st.markdown("""
-            <style>
-            div[data-testid="stTextInput"] input {
-                direction: rtl !important;
-                text-align: right !important;
-                unicode-bidi: bidi-override !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-        elif query and not detect_rtl(query):
-            # Reset to LTR for non-RTL text
-            st.markdown("""
-            <style>
-            div[data-testid="stTextInput"] input {
-                direction: ltr !important;
-                text-align: left !important;
-                unicode-bidi: normal !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
+        with chat_controls_col2:
+            st.write("")  # Spacer
+            if st.button("🗑️ Clear Chat", help="Clear chat history"):
+                st.session_state.chat_messages = []
+                st.rerun()
         
-        # Search button
-        if st.button("🔍 Search", type="primary") and query:
+        # Chat History Container
+        chat_container = st.container()
+        with chat_container:
+            if st.session_state.chat_messages:
+                for message in st.session_state.chat_messages:
+                    display_chat_message(message)
+            else:
+                # Welcome message
+                with st.chat_message("assistant"):
+                    st.markdown("👋 Hello! I'm your Contract Intelligence Assistant. Ask me anything about your uploaded contracts!")
+        
+        # Apply RTL styling to chat input if needed (detect from last user message)
+        if st.session_state.chat_messages:
+            last_user_messages = [msg for msg in st.session_state.chat_messages if msg["role"] == "user"]
+            if last_user_messages and detect_rtl(last_user_messages[-1]["content"]):
+                st.markdown("""
+                <style>
+                div[data-testid="stChatInput"] input {
+                    direction: rtl !important;
+                    text-align: right !important;
+                    unicode-bidi: bidi-override !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+        
+        # Chat Input (sticky to bottom)
+        if prompt := st.chat_input("Ask me about your contracts...", key="chat_input"):
             if not documents:
                 st.warning("Please upload and process at least one document first.")
             else:
-                with st.spinner("Searching documents..."):
+                # Add user message to chat history
+                add_chat_message("user", prompt)
+                
+                # Process the query
+                with st.spinner("Analyzing contracts..."):
                     try:
                         # Determine target documents and folder based on selection
                         target_folder = None if selected_folder == "All Folders" else selected_folder
@@ -733,61 +894,52 @@ def main():
                             target_documents = [selected_contract]
                         
                         # Query with contract and folder filtering
-                        results = rag.query_documents(query, target_documents=target_documents, target_folder=target_folder)
+                        results = rag.query_documents(prompt, target_documents=target_documents, target_folder=target_folder)
                         
-                        # Display answer with RTL support
-                        st.subheader("📋 Answer")
-                        display_rtl_text(results["answer"])
+                        # Prepare metadata for assistant message
+                        search_scope = ""
+                        if target_folder and target_documents:
+                            search_scope = f"{selected_contract} in folder '{target_folder}'"
+                        elif target_folder:
+                            folder_doc_count = len(documents_by_folder[target_folder])
+                            search_scope = f"All {folder_doc_count} contracts in folder '{target_folder}'"
+                        elif target_documents:
+                            search_scope = f"{selected_contract} only"
+                        else:
+                            search_scope = f"All {len(documents)} contracts"
                         
-                        # Display sources with enhanced information
-                        with st.expander("📚 Source Information & Context"):
-                            # Show search scope info
-                            if target_folder and target_documents:
-                                search_info = f"**🎯 Search Scope**: {selected_contract} in folder '{target_folder}'"
-                            elif target_folder:
-                                folder_doc_count = len(documents_by_folder[target_folder])
-                                search_info = f"**🎯 Search Scope**: All {folder_doc_count} contracts in folder '{target_folder}'"
-                            elif target_documents:
-                                search_info = f"**🎯 Search Scope**: {selected_contract} only"
-                            else:
-                                search_info = f"**🎯 Search Scope**: All {len(documents)} contracts"
-                            st.markdown(search_info)
-                            
-                            # Show which contracts were actually found in results
-                            source_contracts = set(metadata['document_name'] for metadata in results["source_info"])
-                            if len(source_contracts) > 1:
-                                st.markdown(f"**📊 Results found in**: {', '.join(sorted(source_contracts))}")
-                            elif len(source_contracts) == 1:
-                                st.markdown(f"**📊 Results found in**: {list(source_contracts)[0]}")
-                            
-                            st.divider()
-                            
-                            for i, (chunk, metadata, score) in enumerate(zip(
-                                results["context_chunks"],
-                                results["source_info"],
-                                results["similarity_scores"]
-                            )):
-                                st.write(f"**Source {i+1}** (Similarity: {score:.2f})")
-                                st.write(f"📄 Document: {metadata['document_name']}")
-                                st.write(f"📁 Folder: {metadata.get('folder', 'General')}")
-                                st.write(f"🔧 Extraction: {metadata.get('extraction_method', 'standard').title()}")
-                                st.write(f"📝 Content Preview:")
-                                chunk_preview = chunk[:500] + ("..." if len(chunk) > 500 else "")
-                                
-                                # Display context with RTL support
-                                if detect_rtl(chunk_preview):
-                                    st.markdown(f'<div class="rtl-text" style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: 100px; overflow-y: auto;">{chunk_preview}</div>', unsafe_allow_html=True)
-                                else:
-                                    st.text_area(
-                                        f"Context {i+1}:",
-                                        chunk_preview,
-                                        height=100,
-                                        key=f"context_{i}"
-                                    )
-                                st.divider()
+                        # Prepare source information
+                        source_contracts = set(metadata['document_name'] for metadata in results["source_info"])
+                        source_chunks = []
+                        
+                        for i, (chunk, metadata, score) in enumerate(zip(
+                            results["context_chunks"],
+                            results["source_info"],
+                            results["similarity_scores"]
+                        )):
+                            source_chunks.append({
+                                'content': chunk,
+                                'document_name': metadata['document_name'],
+                                'folder': metadata.get('folder', 'General'),
+                                'extraction_method': metadata.get('extraction_method', 'standard'),
+                                'score': score
+                            })
+                        
+                        # Add assistant response to chat history
+                        assistant_metadata = {
+                            "show_sources": True,
+                            "search_scope": search_scope,
+                            "source_contracts": source_contracts,
+                            "source_chunks": source_chunks
+                        }
+                        
+                        add_chat_message("assistant", results["answer"], assistant_metadata)
                         
                     except Exception as e:
-                        st.error(f"Error querying documents: {e}")
+                        add_chat_message("assistant", f"❌ Error analyzing contracts: {e}")
+                
+                # Rerun to display new messages
+                st.rerun()
     
     # Compact footer
     st.divider()

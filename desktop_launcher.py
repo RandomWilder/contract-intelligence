@@ -328,13 +328,16 @@ class ContractIntelligenceSetup:
                     app_dir = Path(__file__).parent
                     streamlit_app = app_dir / "streamlit_app.py"
                     
-                    # Launch Streamlit
+                    # Launch Streamlit with proper network binding for macOS
                     subprocess.run([
                         sys.executable, "-m", "streamlit", "run", 
                         str(streamlit_app),
                         "--server.headless=true",
+                        "--server.address=localhost",
                         "--server.port=8501",
-                        "--browser.gatherUsageStats=false"
+                        "--browser.gatherUsageStats=false",
+                        "--server.enableCORS=false",
+                        "--server.enableXsrfProtection=false"
                     ])
                 except Exception as e:
                     messagebox.showerror("Launch Error", f"Failed to launch app: {e}")
@@ -344,10 +347,25 @@ class ContractIntelligenceSetup:
             
             threading.Thread(target=launch_streamlit, daemon=True).start()
             
-            # Open browser after short delay
+            # Open browser after longer delay to ensure Streamlit is ready
             def open_browser():
-                time.sleep(3)
-                webbrowser.open("http://localhost:8501")
+                time.sleep(5)  # Increased delay for macOS
+                try:
+                    # Try to verify Streamlit is running before opening browser
+                    import requests
+                    for attempt in range(10):  # Try for up to 10 seconds
+                        try:
+                            response = requests.get("http://localhost:8501/healthz", timeout=1)
+                            if response.status_code == 200:
+                                break
+                        except:
+                            time.sleep(1)
+                    
+                    webbrowser.open("http://localhost:8501")
+                except Exception as e:
+                    print(f"Browser opening error: {e}")
+                    # Fallback: just open the URL anyway
+                    webbrowser.open("http://localhost:8501")
             
             threading.Thread(target=open_browser, daemon=True).start()
             
