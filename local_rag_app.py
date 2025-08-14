@@ -336,9 +336,16 @@ class LocalRAGFlow:
             )
         )
         
-        # Create or get collection
+        # Create or get collection with explicit OpenAI embedding function
+        from chromadb.utils import embedding_functions
+        openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="text-embedding-ada-002"
+        )
+        
         self.collection = self.chroma_client.get_or_create_collection(
             name="contracts",
+            embedding_function=openai_ef,
             metadata={"hnsw:space": "cosine"}
         )
         
