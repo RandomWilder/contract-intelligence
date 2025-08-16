@@ -13,10 +13,10 @@ import subprocess
 import threading
 import webbrowser
 import time
+import uuid
 from pathlib import Path
 import requests
 from datetime import datetime
-import uuid
 
 class ContractIntelligenceSetup:
     def __init__(self):
@@ -346,6 +346,26 @@ class ContractIntelligenceSetup:
         
         threading.Thread(target=send_async, daemon=True).start()
     
+    def check_dependencies(self):
+        """Check if all required dependencies are available"""
+        required_modules = [
+            'streamlit',
+            'openai', 
+            'chromadb',
+            'google.auth',
+            'PyPDF2',
+            'docx'
+        ]
+        
+        missing_modules = []
+        for module in required_modules:
+            try:
+                __import__(module)
+            except ImportError:
+                missing_modules.append(module)
+        
+        return missing_modules
+
     def launch_app(self):
         """Launch the Streamlit application"""
         if not self.config_file.exists():
@@ -353,6 +373,15 @@ class ContractIntelligenceSetup:
             return
         
         try:
+            # Check dependencies first
+            self.status_var.set("🔍 Checking dependencies...")
+            missing_deps = self.check_dependencies()
+            if missing_deps:
+                error_msg = f"Missing required dependencies: {', '.join(missing_deps)}\nPlease reinstall the application."
+                messagebox.showerror("Dependency Error", error_msg)
+                self.status_var.set(f"❌ Missing dependencies: {', '.join(missing_deps)}")
+                return
+            
             # Set environment variables from config
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
@@ -377,7 +406,12 @@ class ContractIntelligenceSetup:
                     app_dir = Path(__file__).parent
                     streamlit_app = app_dir / "streamlit_app.py"
                     
-                    # Launch Streamlit with proper network binding for macOS
+                    # Prepare environment variables for subprocess
+                    env = os.environ.copy()
+                    env['OPENAI_API_KEY'] = config['openai_api_key']
+                    env['GOOGLE_APPLICATION_CREDENTIALS'] = str(get_google_credentials_path())
+                    
+                    # Launch Streamlit with proper network binding and environment
                     # Use Popen for non-blocking execution and 0.0.0.0 for better compatibility
                     process = subprocess.Popen([
                         sys.executable, "-m", "streamlit", "run", 
@@ -388,10 +422,21 @@ class ContractIntelligenceSetup:
                         "--browser.gatherUsageStats=false",
                         "--server.enableCORS=false",
                         "--server.enableXsrfProtection=false"
-                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
                     
                     print(f"✅ Streamlit process started with PID: {process.pid}")
+                    print(f"✅ Environment variables set: OPENAI_API_KEY, GOOGLE_APPLICATION_CREDENTIALS")
                     print("🚀 Streamlit should be available at: http://localhost:8501")
+                    
+                    # Monitor the process for any immediate errors
+                    time.sleep(2)  # Give it a moment to start
+                    if process.poll() is not None:
+                        # Process has already terminated
+                        stdout, stderr = process.communicate()
+                        error_msg = f"Streamlit failed to start:\nSTDOUT: {stdout}\nSTDERR: {stderr}"
+                        print(f"❌ {error_msg}")
+                        messagebox.showerror("Streamlit Error", error_msg)
+                        return
                 except Exception as e:
                     messagebox.showerror("Launch Error", f"Failed to launch app: {e}")
                 finally:

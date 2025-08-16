@@ -1,6 +1,7 @@
 # streamlit_app.py
 import streamlit as st
 import os
+import json
 from local_rag_app import LocalRAGFlow
 from pathlib import Path
 import webbrowser
@@ -582,12 +583,40 @@ def handle_google_auth(rag):
         
         return False
 
+def load_config_if_needed():
+    """Load configuration from wizard if environment variables are not set"""
+    if not os.getenv("OPENAI_API_KEY"):
+        # Try to load from wizard configuration
+        config_file = Path.home() / ".contract_intelligence" / "config.json"
+        if config_file.exists():
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                
+                # Set environment variables
+                os.environ['OPENAI_API_KEY'] = config['openai_api_key']
+                
+                # Set Google credentials if available
+                google_creds_path = config.get('google_credentials_path')
+                if google_creds_path and Path(google_creds_path).exists():
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = google_creds_path
+                
+                return True
+            except Exception as e:
+                st.error(f"❌ Failed to load configuration: {e}")
+                return False
+    return True
+
 def main():
     # Inject RTL CSS and modern styling first
     inject_rtl_css()
     
     # Initialize chat history
     initialize_chat_history()
+    
+    # Load configuration if needed
+    if not load_config_if_needed():
+        return
     
     # Centered header title and subtitle - pushed to top
     st.markdown("""
@@ -603,7 +632,8 @@ def main():
     
     # Initialize RAGFlow to get status information
     if not os.getenv("OPENAI_API_KEY"):
-        st.error("❌ OpenAI API Key Missing - Please set OPENAI_API_KEY in .env file")
+        st.error("❌ OpenAI API Key Missing - Please run the setup wizard first")
+        st.info("💡 Run the desktop launcher to configure your API keys")
         return
     
     # Initialize with default model first
