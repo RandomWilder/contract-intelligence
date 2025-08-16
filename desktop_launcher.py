@@ -197,14 +197,36 @@ class ContractIntelligenceSetup:
     
     def validate_openai_key(self, api_key):
         """Validate OpenAI API key with specific error messages"""
+        # Basic format validation first
+        if not api_key or not api_key.strip():
+            return False, "API key cannot be empty."
+            
+        api_key = api_key.strip()
+        
+        if not api_key.startswith("sk-"):
+            return False, "Invalid API key format. OpenAI keys should start with 'sk-'."
+            
+        if len(api_key) < 20:  # Basic length check
+            return False, "API key appears to be too short."
+        
         try:
             from openai import OpenAI
             import openai
-            client = OpenAI(api_key=api_key)
             
-            # Test with a simple API call
+            # Create client with explicit timeout
+            client = OpenAI(
+                api_key=api_key,
+                timeout=30.0  # 30 second timeout
+            )
+            
+            # Test with a simple API call - models.list is the most reliable test
             response = client.models.list()
-            return True, "Valid API key"
+            
+            # Verify we actually got a response
+            if hasattr(response, 'data') and len(response.data) > 0:
+                return True, "Valid API key"
+            else:
+                return False, "API key validation failed - no models returned."
             
         except openai.AuthenticationError as e:
             # Handle 401 authentication errors specifically
@@ -215,6 +237,9 @@ class ContractIntelligenceSetup:
         except openai.APIConnectionError as e:
             # Handle network connection errors
             return False, "Cannot connect to OpenAI. Please check your internet connection."
+        except openai.APITimeoutError as e:
+            # Handle timeout errors
+            return False, "OpenAI API request timed out. Please try again."
         except openai.APIStatusError as e:
             # Handle other API status errors (4xx, 5xx)
             if e.status_code == 402:
@@ -225,8 +250,10 @@ class ContractIntelligenceSetup:
                 return False, "OpenAI server error. Please try again later."
             else:
                 return False, f"OpenAI API error (status {e.status_code}): {str(e)}"
+        except ImportError as e:
+            return False, "OpenAI library not properly installed. Please reinstall the application."
         except Exception as e:
-            # Fallback for any other errors
+            # Fallback for any other errors with detailed logging
             error_str = str(e).lower()
             
             if "invalid api key" in error_str or "unauthorized" in error_str:
@@ -237,10 +264,11 @@ class ContractIntelligenceSetup:
                 return False, "OpenAI account has insufficient credits. Please add credits to your account."
             elif "quota" in error_str or "billing" in error_str:
                 return False, "OpenAI billing issue. Please check your account billing status."
-            elif "network" in error_str or "connection" in error_str:
+            elif "network" in error_str or "connection" in error_str or "timeout" in error_str:
                 return False, "Cannot connect to OpenAI. Please check your internet connection."
             else:
-                return False, f"OpenAI API error: {str(e)}"
+                # More detailed error for debugging
+                return False, f"OpenAI API validation failed: {type(e).__name__}: {str(e)}"
 
     def save_config(self):
         """Save configuration to file"""
