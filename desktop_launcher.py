@@ -199,13 +199,34 @@ class ContractIntelligenceSetup:
         """Validate OpenAI API key with specific error messages"""
         try:
             from openai import OpenAI
+            import openai
             client = OpenAI(api_key=api_key)
             
             # Test with a simple API call
             response = client.models.list()
             return True, "Valid API key"
             
+        except openai.AuthenticationError as e:
+            # Handle 401 authentication errors specifically
+            return False, "Invalid OpenAI API key. Please check your key and try again."
+        except openai.RateLimitError as e:
+            # Handle 429 rate limit errors
+            return False, "OpenAI rate limit exceeded. Please check your usage limits or try again later."
+        except openai.APIConnectionError as e:
+            # Handle network connection errors
+            return False, "Cannot connect to OpenAI. Please check your internet connection."
+        except openai.APIStatusError as e:
+            # Handle other API status errors (4xx, 5xx)
+            if e.status_code == 402:
+                return False, "OpenAI account has insufficient credits. Please add credits to your account."
+            elif e.status_code == 403:
+                return False, "OpenAI API access forbidden. Please check your account permissions."
+            elif e.status_code >= 500:
+                return False, "OpenAI server error. Please try again later."
+            else:
+                return False, f"OpenAI API error (status {e.status_code}): {str(e)}"
         except Exception as e:
+            # Fallback for any other errors
             error_str = str(e).lower()
             
             if "invalid api key" in error_str or "unauthorized" in error_str:

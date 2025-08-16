@@ -337,15 +337,21 @@ def inject_rtl_css():
        CHAT INTERFACE STYLING
        ========================= */
     
-    /* Chat container */
-    .chat-container {
-        height: 500px !important;
-        overflow-y: auto !important;
-        padding: 1rem !important;
+    /* Chat container - target Streamlit's container with height */
+    div[data-testid="stVerticalBlock"] > div[style*="height: 500px"] {
         border: 1px solid #e9ecef !important;
         border-radius: 8px !important;
         background: #f8f9fa !important;
+        padding: 1rem !important;
         margin-bottom: 1rem !important;
+        overflow-y: auto !important;
+        scroll-behavior: smooth !important;
+    }
+    
+    /* Ensure chat messages fit within container */
+    div[data-testid="stVerticalBlock"] > div[style*="height: 500px"] .stChatMessage {
+        max-width: 100% !important;
+        word-wrap: break-word !important;
     }
     
     /* Chat message bubbles */
@@ -849,8 +855,8 @@ def main():
                 st.session_state.chat_messages = []
                 st.rerun()
         
-        # Chat History Container
-        chat_container = st.container()
+        # Chat History Container with proper scrollable styling
+        chat_container = st.container(height=500)
         with chat_container:
             if st.session_state.chat_messages:
                 for message in st.session_state.chat_messages:
