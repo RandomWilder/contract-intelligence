@@ -1,0 +1,203 @@
+name: Build Electron App Distribution
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Manual build version (e.g., v1.5.0)'
+        required: false
+        default: 'manual'
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} Electron App
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact-name: Contract-Intelligence-Windows-Electron
+            installer-ext: exe
+          - os: macos-latest
+            platform: mac
+            artifact-name: Contract-Intelligence-macOS-Electron
+            installer-ext: dmg
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: electron-app/package-lock.json
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Node.js dependencies
+        working-directory: electron-app
+        run: npm ci
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare Python backend for bundling
+        run: |
+          # Copy Python backend files to electron-app for bundling
+          mkdir -p electron-app/python-backend
+          cp -r backend/* electron-app/python-backend/
+          cp -r *.py electron-app/python-backend/ 2>/dev/null || true
+          cp -r contract_intelligence.py electron-app/python-backend/ 2>/dev/null || true
+          cp -r utils.py electron-app/python-backend/ 2>/dev/null || true
+          cp -r local_rag_app.py electron-app/python-backend/ 2>/dev/null || true
+
+      - name: Update Electron app package.json version
+        working-directory: electron-app
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            npm version ${VERSION#v} --no-git-tag-version
+          fi
+        shell: bash
+
+      - name: Build Electron app (Windows)
+        if: matrix.platform == 'win'
+        working-directory: electron-app
+        run: npm run build-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Electron app (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: electron-app
+        run: npm run build-mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Uncomment and add these secrets to your GitHub repo for code signing:
+          # CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
+          # CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+
+      - name: Verify build output
+        working-directory: electron-app
+        run: |
+          echo "Build completed. Contents of dist directory:"
+          ls -la dist/
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: electron-app/dist/*.${{ matrix.installer-ext }}
+          retention-days: 90
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Contract-Intelligence-Windows-Electron
+          path: artifacts/
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Contract-Intelligence-macOS-Electron
+          path: artifacts/
+
+      - name: Get tag name
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create release notes
+        run: |
+          cat > release_notes.md << EOF
+          # Contract Intelligence Platform ${{ steps.tag.outputs.tag }} - Electron Edition
+          
+          ## 🚀 Modern Desktop Application
+          
+          This release features the new **Electron-based desktop application** with enhanced features and better cross-platform compatibility.
+          
+          ### ✨ Key Features:
+          - **Smart Semantic Chunking**: Advanced contract clause-based text segmentation
+          - **RTL Language Support**: Full Hebrew/Arabic text support with proper number formatting
+          - **Persistent Data Storage**: Documents remain available across app restarts
+          - **Modern UI**: Clean, responsive interface with real-time notifications
+          - **Enhanced OCR**: Improved Google Vision API integration
+          - **Cross-Platform**: Native Windows and macOS applications
+          
+          ### 📦 Installation:
+          
+          **Windows:**
+          1. Download \`Contract Intelligence Platform Setup *.exe\`
+          2. Run the installer and follow the setup wizard
+          3. Launch the application from Start Menu or Desktop
+          
+          **macOS:**
+          1. Download \`Contract Intelligence Platform-*.dmg\`
+          2. Open the DMG and drag the app to Applications
+          3. **IMPORTANT**: Right-click the app → "Open" (bypasses security warning)
+          4. Click "Open" when prompted about unidentified developer
+          
+          ### 🔧 Requirements:
+          - **OpenAI API Key** (for AI analysis)
+          - **Google Cloud Vision credentials** (JSON file for OCR)
+          - Windows 10+ or macOS 10.14+
+          
+          ### 🔄 Migration from Streamlit Version:
+          - The Electron app uses a separate database (\`contracts_electron\`)
+          - Your existing Streamlit data remains untouched
+          - Re-upload documents to use them in the Electron app
+          
+          ---
+          **Build Date:** $(date -u)  
+          **Commit:** ${GITHUB_SHA:0:7}  
+          **Architecture:** Electron + Python FastAPI Backend
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Contract Intelligence ${{ steps.tag.outputs.tag }} - Electron
+          body_path: release_notes.md
+          files: |
+            artifacts/*.exe
+            artifacts/*.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

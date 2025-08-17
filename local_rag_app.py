@@ -175,13 +175,24 @@ class GoogleVisionOCR:
     
     def _get_access_token(self):
         """Get valid access token, refreshing if necessary"""
-        if self.credentials.expired and self.credentials.refresh_token:
-            try:
+        try:
+            # Check if credentials are expired
+            if self.credentials.expired and self.credentials.refresh_token:
+                print("[INFO] Access token expired, refreshing...")
                 self.credentials.refresh(Request())
-            except Exception as e:
-                print(f"Token refresh error: {e}")
+                print("[SUCCESS] Access token refreshed")
+            elif self.credentials.expired:
+                print("[ERROR] Access token expired and no refresh token available")
                 return None
-        return self.credentials.token
+            
+            if not self.credentials.token:
+                print("[ERROR] No access token available")
+                return None
+                
+            return self.credentials.token
+        except Exception as e:
+            print(f"[ERROR] Token refresh error: {e}")
+            return None
     
     def _make_vision_request(self, image_content):
         """Make a request to Google Vision API using REST API with proper OAuth2 token"""
@@ -214,9 +225,13 @@ class GoogleVisionOCR:
             # Make the API request with proper headers
             headers = {
                 "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "X-Goog-User-Project": self._get_project_id()
+                "Content-Type": "application/json"
             }
+            
+            # Add project ID header only if available
+            project_id = self._get_project_id()
+            if project_id:
+                headers["X-Goog-User-Project"] = project_id
             
             response = requests.post(
                 self.vision_api_url,
@@ -233,10 +248,22 @@ class GoogleVisionOCR:
                         return response_data["textAnnotations"][0]["description"]
                 return ""
             else:
-                print(f"Vision API Error: {response.status_code} - {response.text}")
-                # If it's a scope error, provide helpful message
-                if response.status_code == 403:
-                    print("This might be a scope issue. Ensure your OAuth2 credentials have 'https://www.googleapis.com/auth/cloud-platform' scope.")
+                error_msg = f"Vision API Error: {response.status_code} - {response.text}"
+                print(error_msg)
+                
+                # Check for common authentication issues
+                if response.status_code == 401:
+                    print("[ERROR] Authentication failed. Please check:")
+                    print("  1. Google credentials are valid and not expired")
+                    print("  2. Vision API is enabled in your Google Cloud project")
+                    print("  3. OAuth2 scopes include 'cloud-platform' or 'cloud-vision'")
+                elif response.status_code == 403:
+                    print("[ERROR] Permission denied. Check:")
+                    print("  1. Vision API is enabled in your project")
+                    print("  2. Billing is enabled for your project")
+                    print("  3. Your account has Vision API permissions")
+                    print("  4. OAuth2 credentials have 'https://www.googleapis.com/auth/cloud-platform' scope")
+                
                 return ""
                 
         except Exception as e:
@@ -268,9 +295,38 @@ class GoogleVisionOCR:
         except Exception:
             return None
     
+    def _validate_authentication(self):
+        """Validate that authentication is working before making API calls"""
+        try:
+            access_token = self._get_access_token()
+            if not access_token:
+                return False, "No valid access token available"
+            
+            # Check scopes
+            if hasattr(self.credentials, 'scopes') and self.credentials.scopes:
+                required_scopes = [
+                    'https://www.googleapis.com/auth/cloud-platform',
+                    'https://www.googleapis.com/auth/cloud-vision'
+                ]
+                granted_scopes = set(self.credentials.scopes)
+                has_required_scope = any(scope in granted_scopes for scope in required_scopes)
+                
+                if not has_required_scope:
+                    return False, f"Missing required scopes. Current: {self.credentials.scopes}"
+            
+            return True, "Authentication valid"
+        except Exception as e:
+            return False, f"Authentication validation failed: {e}"
+
     def extract_text_from_image(self, image_path: str) -> str:
         """Extract text from image using Google Vision API REST API"""
         try:
+            # Validate authentication first
+            is_valid, message = self._validate_authentication()
+            if not is_valid:
+                print(f"[ERROR] Authentication validation failed: {message}")
+                return ""
+            
             with open(image_path, 'rb') as image_file:
                 content = image_file.read()
             
@@ -308,22 +364,30 @@ class GoogleVisionOCR:
             return ""
 
 class LocalRAGFlow:
-    def __init__(self, chat_model="gpt-4o-mini"):
+    def __init__(self, chat_model="gpt-4o-mini", use_electron_collection=False):
         # Explicitly disable ONNX models in ChromaDB
         os.environ['ALLOW_RESET'] = 'TRUE'
         os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
         
         self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.chat_model = chat_model
+        self.use_electron_collection = use_electron_collection
         
-        # Initialize ChromaDB with local persistence and explicit settings to prevent ONNX model loading
+        # Choose database path based on application type
+        if use_electron_collection:
+            db_path = "./data/chroma_electron"
+            collection_name = "contracts_electron"
+        else:
+            db_path = "./data/chroma_db" 
+            collection_name = "contracts"
+        
+        # Initialize ChromaDB with local persistence and Windows-compatible settings
         self.chroma_client = chromadb.PersistentClient(
-            path="./data/chroma_db",
+            path=db_path,
             settings=Settings(
                 anonymized_telemetry=False,
-                allow_reset=True,
-                # Explicitly disable any default embedding models
-                chroma_server_nofile=True
+                allow_reset=True
+                # Removed chroma_server_nofile=True (not supported on Windows)
             )
         )
         
@@ -334,19 +398,22 @@ class LocalRAGFlow:
             model_name="text-embedding-ada-002"
         )
         
-        # Always ensure we use OpenAI embeddings - delete and recreate if needed
+        # Get or create collection (persistent across app restarts)
         try:
-            # Try to delete existing collection to ensure clean state
-            self.chroma_client.delete_collection(name="contracts")
+            # Try to get existing collection first
+            self.collection = self.chroma_client.get_collection(
+                name=collection_name,
+                embedding_function=openai_ef
+            )
+            print(f"[INFO] Using existing collection '{collection_name}'")
         except:
-            pass  # Collection might not exist
-        
-        # Always create collection with OpenAI embeddings
-        self.collection = self.chroma_client.create_collection(
-            name="contracts",
-            embedding_function=openai_ef,
-            metadata={"hnsw:space": "cosine"}
-        )
+            # Collection doesn't exist, create it
+            self.collection = self.chroma_client.create_collection(
+                name=collection_name,
+                embedding_function=openai_ef,
+                metadata={"hnsw:space": "cosine"}
+            )
+            print(f"[INFO] Created new collection '{collection_name}'")
         
         # Initialize Google services
         self.auth_manager = GoogleAuthManager()
@@ -422,17 +489,113 @@ class LocalRAGFlow:
         return text
     
     def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """Split text into overlapping chunks"""
+        """Smart semantic chunking for contracts with clause-based segmentation"""
+        if not text.strip():
+            return []
+        
+        # Try semantic chunking first
+        semantic_chunks = self._semantic_chunk_contract(text)
+        if semantic_chunks:
+            print("[INFO] Using semantic clause-based chunking")
+            return semantic_chunks
+        
+        # Fallback to sentence-aware chunking
+        print("[INFO] Using sentence-aware chunking")
+        return self._sentence_aware_chunk(text, chunk_size, overlap)
+    
+    def _semantic_chunk_contract(self, text: str) -> List[str]:
+        """Semantic chunking based on contract structure and clauses"""
+        try:
+            chunks = []
+            
+            # Contract section patterns (English and Hebrew)
+            section_patterns = [
+                r'(?i)(?:^|\n)\s*(?:article|section|clause|paragraph|part)\s*[ivx\d]+[.:]',
+                r'(?i)(?:^|\n)\s*\d+\.\s*[A-Z]',  # Numbered sections
+                r'(?i)(?:^|\n)\s*[A-Z]\.\s*[A-Z]',  # Lettered sections
+                r'(?i)(?:^|\n)\s*(?:whereas|now therefore|in witness whereof)',
+                r'(?i)(?:^|\n)\s*(?:definitions?|terms?|conditions?|obligations?|rights?|responsibilities?)',
+                # Hebrew patterns
+                r'(?:^|\n)\s*(?:סעיף|פרק|חלק|מדור)\s*[\u05d0-\u05ea\d]+[.:]',
+                r'(?:^|\n)\s*\d+\.\s*[\u05d0-\u05ea]',
+                r'(?:^|\n)\s*[\u05d0-\u05ea]\.\s*[\u05d0-\u05ea]',
+            ]
+            
+            # Split by major sections first
+            import re
+            combined_pattern = '|'.join(section_patterns)
+            sections = re.split(combined_pattern, text, flags=re.MULTILINE)
+            
+            if len(sections) > 1:
+                # We found semantic sections
+                current_chunk = ""
+                
+                for i, section in enumerate(sections):
+                    section = section.strip()
+                    if not section:
+                        continue
+                    
+                    # If adding this section would make chunk too large, save current and start new
+                    if len(current_chunk) + len(section) > 1500 and current_chunk:
+                        chunks.append(current_chunk.strip())
+                        current_chunk = section
+                    else:
+                        current_chunk += ("\n\n" if current_chunk else "") + section
+                
+                # Add the last chunk
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                
+                # Filter out very small chunks and merge them
+                filtered_chunks = []
+                for chunk in chunks:
+                    if len(chunk) < 100 and filtered_chunks:
+                        # Merge small chunk with previous
+                        filtered_chunks[-1] += "\n\n" + chunk
+                    else:
+                        filtered_chunks.append(chunk)
+                
+                return filtered_chunks if len(filtered_chunks) > 1 else []
+            
+            return []  # No semantic structure found
+            
+        except Exception as e:
+            print(f"[WARNING] Semantic chunking failed: {e}")
+            return []
+    
+    def _sentence_aware_chunk(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+        """Sentence-aware chunking that preserves sentence boundaries"""
+        import re
+        
+        # Split into sentences (works for both English and Hebrew)
+        sentence_pattern = r'[.!?]+\s+|[\u05c3\u05f3\u05f4]+\s+'  # English and Hebrew sentence endings
+        sentences = re.split(sentence_pattern, text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
         chunks = []
-        start = 0
+        current_chunk = ""
         
-        while start < len(text):
-            end = start + chunk_size
-            chunk = text[start:end]
-            chunks.append(chunk)
-            start = end - overlap
+        for sentence in sentences:
+            # If adding this sentence would exceed chunk_size and we have content
+            if len(current_chunk) + len(sentence) > chunk_size and current_chunk:
+                chunks.append(current_chunk.strip())
+                
+                # Start new chunk with overlap (last few sentences)
+                overlap_text = ""
+                if overlap > 0:
+                    words = current_chunk.split()
+                    if len(words) > overlap // 10:  # Approximate word count for overlap
+                        overlap_text = " ".join(words[-(overlap // 10):]) + " "
+                
+                current_chunk = overlap_text + sentence
+            else:
+                current_chunk += (" " if current_chunk else "") + sentence
         
-        return [chunk.strip() for chunk in chunks if chunk.strip()]
+        # Add the last chunk
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        return chunks if chunks else [text]
     
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings from OpenAI"""
@@ -453,7 +616,14 @@ class LocalRAGFlow:
         doc_id = document_name or Path(file_path).stem
         
         # Analyze contract with intelligence engine
-        print(f"🧠 Analyzing contract intelligence for {doc_id}...")
+        # Sanitize doc_id for safe console printing on Windows, but keep original for processing
+        try:
+            print(f"[INFO] Analyzing contract intelligence for {doc_id}...")
+        except UnicodeEncodeError:
+            # Fallback to ASCII for console if needed
+            safe_doc_id = doc_id.encode('ascii', errors='replace').decode('ascii')
+            print(f"[INFO] Analyzing contract intelligence for {safe_doc_id}...")
+        
         contract_analysis = self.contract_intelligence.analyze_contract(text, doc_id)
         
         # Create chunks
@@ -495,21 +665,23 @@ class LocalRAGFlow:
         
         # Create detailed return message
         intelligence_summary = (
-            f"📊 Contract Analysis Results:\n"
-            f"   • Type: {contract_analysis.contract_type} "
+            f"[ANALYSIS] Contract Analysis Results:\n"
+            f"   - Type: {contract_analysis.contract_type} "
             f"(confidence: {contract_analysis.contract_type_confidence:.2f})\n"
-            f"   • Language: {contract_analysis.language}\n"
-            f"   • Parties found: {len(contract_analysis.parties)}\n"
-            f"   • Key dates: {len(contract_analysis.key_dates)}\n"
+            f"   - Language: {contract_analysis.language}\n"
+            f"   - Parties found: {len(contract_analysis.parties)}\n"
+            f"   - Key dates: {len(contract_analysis.key_dates)}\n"
         )
         
         if contract_analysis.parties:
             party_names = [p.name for p in contract_analysis.parties[:3] if p.name and p.name != "Unknown"]
             if party_names:
-                intelligence_summary += f"   • Main parties: {', '.join(party_names)}\n"
+                # Keep original party names for API response (supports Unicode/RTL)
+                intelligence_summary += f"   - Main parties: {', '.join(party_names)}\n"
         
+        # Return original doc_id for API response (supports Unicode/RTL)
         return (
-            f"✅ Added {len(chunks)} chunks from {doc_id} using "
+            f"[SUCCESS] Added {len(chunks)} chunks from {doc_id} using "
             f"{'OCR' if use_ocr else 'standard'} extraction\n\n{intelligence_summary}"
         )
     
@@ -553,7 +725,7 @@ class LocalRAGFlow:
                 include=["documents", "metadatas", "distances"]
             )
             if fallback_results["documents"][0]:
-                print(f"⚠️ No results found with filtering. Available documents:")
+                print(f"[WARNING] No results found with filtering. Available documents:")
                 for meta in fallback_results["metadatas"][0][:3]:
                     print(f"   - {meta.get('document_name', 'Unknown')} in folder '{meta.get('folder', 'Unknown')}'")
             return {
@@ -691,9 +863,9 @@ If information isn't available in the provided context, clearly state this and s
                 updated_count += 1
         
         if updated_count > 0:
-            print(f"✅ Migrated {updated_count} document chunks to include folder field")
+            print(f"[SUCCESS] Migrated {updated_count} document chunks to include folder field")
         else:
-            print("ℹ️ All documents already have folder field")
+            print("[INFO] All documents already have folder field")
         
         return updated_count
     
@@ -717,11 +889,11 @@ If information isn't available in the provided context, clearly state this and s
             results = self.collection.get()
             if results['ids']:
                 self.collection.delete(ids=results['ids'])
-                return f"✅ Cleared {len(results['ids'])} document chunks from database"
+                return f"[SUCCESS] Cleared {len(results['ids'])} document chunks from database"
             else:
-                return "ℹ️ Database is already empty"
+                return "[INFO] Database is already empty"
         except Exception as e:
-            return f"❌ Error clearing database: {str(e)}"
+            return f"[ERROR] Error clearing database: {str(e)}"
     
     def reprocess_all_documents(self):
         """Re-process all documents with RTL number fixes"""
@@ -729,7 +901,7 @@ If information isn't available in the provided context, clearly state this and s
             # Get all unique documents
             results = self.collection.get()
             if not results['ids']:
-                return "ℹ️ No documents to reprocess"
+                return "[INFO] No documents to reprocess"
             
             # Extract unique file paths from metadata
             file_paths = set()
@@ -738,7 +910,7 @@ If information isn't available in the provided context, clearly state this and s
                     file_paths.add(metadata['file_path'])
             
             if not file_paths:
-                return "❌ No file paths found in metadata"
+                return "[ERROR] No file paths found in metadata"
             
             # Clear existing data
             self.clear_all_documents()
@@ -751,13 +923,13 @@ If information isn't available in the provided context, clearly state this and s
                         doc_name = Path(file_path).stem
                         self.add_document(file_path, doc_name)
                         processed_count += 1
-                        print(f"✅ Re-processed: {doc_name}")
+                        print(f"[SUCCESS] Re-processed: {doc_name}")
                     else:
-                        print(f"⚠️ File not found: {file_path}")
+                        print(f"[WARNING] File not found: {file_path}")
                 except Exception as e:
-                    print(f"❌ Error processing {file_path}: {str(e)}")
+                    print(f"[ERROR] Error processing {file_path}: {str(e)}")
             
-            return f"✅ Re-processed {processed_count} documents with RTL number fixes"
+            return f"[SUCCESS] Re-processed {processed_count} documents with RTL number fixes"
             
         except Exception as e:
-            return f"❌ Error during reprocessing: {str(e)}"
+            return f"[ERROR] Error during reprocessing: {str(e)}"

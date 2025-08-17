@@ -12,13 +12,13 @@ def check_chromadb_status():
     os.environ['ALLOW_RESET'] = 'TRUE'
     os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
     
-    # Initialize ChromaDB client with explicit settings to prevent ONNX model loading
+    # Initialize ChromaDB client with Windows-compatible settings
     client = chromadb.PersistentClient(
         path="./data/chroma_db",
         settings=Settings(
             anonymized_telemetry=False,
-            allow_reset=True,
-            chroma_server_nofile=True
+            allow_reset=True
+            # Removed chroma_server_nofile=True (not supported on Windows)
         )
     )
     

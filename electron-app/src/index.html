@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract Intelligence Platform</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1>📄 Contract Intelligence Platform</h1>
+                <p>Analyze. Recommend. Act.</p>
+            </div>
+            
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-item" id="backend-status">
+                    <span class="status-icon">⏳</span>
+                    <span>Initializing...</span>
+                </div>
+                <div class="status-item" id="openai-status">
+                    <span class="status-icon">❌</span>
+                    <span>OpenAI</span>
+                </div>
+                <div class="status-item" id="google-status">
+                    <span class="status-icon">❌</span>
+                    <span>Google OCR</span>
+                </div>
+                <div class="status-item" id="docs-status">
+                    <span class="status-icon">📊</span>
+                    <span>0 Documents</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <aside class="sidebar">
+                <div class="section">
+                    <h3>📁 Document Management</h3>
+                    
+                    <!-- Upload Area -->
+                    <div class="upload-area" id="upload-area">
+                        <div class="upload-content">
+                            <p>📤 Drop files here or click to upload</p>
+                            <input type="file" id="file-input" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png" style="display: none;">
+                            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+                                Choose Files
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Upload Options -->
+                    <div class="upload-options" style="display: none;">
+                        <div class="form-group">
+                            <label for="folder-select">📁 Folder:</label>
+                            <select id="folder-select">
+                                <option value="General">General</option>
+                            </select>
+                            <button class="btn btn-small" onclick="createNewFolder()">+ New</button>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="use-ocr"> 🔍 Use OCR
+                            </label>
+                        </div>
+                        
+                        <button class="btn btn-primary" onclick="uploadFile()">📤 Process Document</button>
+                        <button class="btn btn-secondary" onclick="cancelUpload()">Cancel</button>
+                    </div>
+                    
+                    <!-- Progress -->
+                    <div class="progress-container" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <p class="progress-text">Processing...</p>
+                    </div>
+                </div>
+
+                <!-- Documents List -->
+                <div class="section">
+                    <h3>📋 Documents</h3>
+                    <div id="documents-list" class="documents-list">
+                        <p class="empty-state">No documents yet</p>
+                    </div>
+                </div>
+
+                <!-- Google Auth -->
+                <div class="section">
+                    <h3>🔐 Google Services</h3>
+                    <div id="google-auth-section">
+                        <p>Connect Google services for OCR capabilities</p>
+                        <button class="btn btn-primary" onclick="authenticateGoogle()">🔗 Connect</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Chat Area -->
+            <main class="chat-area">
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="welcome-message">
+                            <h3>👋 Welcome to Contract Intelligence!</h3>
+                            <p>Upload your contracts and start asking questions about them.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <div class="chat-controls">
+                            <select id="model-select" class="model-select">
+                                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                <option value="gpt-4o">gpt-4o</option>
+                                <option value="gpt-4">gpt-4</option>
+                            </select>
+                            
+                            <select id="scope-select" class="scope-select">
+                                <option value="all">All Documents</option>
+                            </select>
+                        </div>
+                        
+                        <div class="chat-input-wrapper">
+                            <textarea 
+                                id="chat-input" 
+                                placeholder="Ask me about your contracts..."
+                                rows="3"
+                            ></textarea>
+                            <button class="send-button" onclick="sendMessage()" id="send-button">
+                                📤 Send
+                            </button>
+                        </div>
+                        
+                        <div class="quick-questions">
+                            <button class="quick-btn" onclick="askQuickQuestion('Key terms and conditions?')">Key Terms</button>
+                            <button class="quick-btn" onclick="askQuickQuestion('Who are the parties?')">Parties</button>
+                            <button class="quick-btn" onclick="askQuickQuestion('Payment terms?')">Payment</button>
+                            <button class="quick-btn" onclick="askQuickQuestion('Contract duration?')">Duration</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>Starting backend services...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -79,33 +79,33 @@ class ContractIntelligenceEngine:
         processing_notes = []
         
         try:
-            print(f"📋 Starting contract analysis for {document_name}")
+            print(f"[INFO] Starting contract analysis for {document_name}")
             
             # Detect language
             language = self._detect_language(text)
             processing_notes.append(f"Detected language: {language}")
-            print(f"  📝 Language detected: {language}")
+            print(f"  [INFO] Language detected: {language}")
             
             # Extract parties
-            print(f"  👥 Extracting parties...")
+            print(f"  [INFO] Extracting parties...")
             parties = self._extract_parties(text, language)
             processing_notes.append(f"Extracted {len(parties)} parties")
-            print(f"  ✅ Found {len(parties)} parties")
+            print(f"  [SUCCESS] Found {len(parties)} parties")
             
             # Classify contract type
-            print(f"  📋 Classifying contract type...")
+            print(f"  [INFO] Classifying contract type...")
             contract_type, type_confidence = self._classify_contract_type(text, language)
             processing_notes.append(f"Classified as: {contract_type} (confidence: {type_confidence:.2f})")
-            print(f"  ✅ Classified as: {contract_type}")
+            print(f"  [SUCCESS] Classified as: {contract_type}")
             
             # Extract key dates
-            print(f"  📅 Extracting key dates...")
+            print(f"  [INFO] Extracting key dates...")
             key_dates = self._extract_key_dates(text, language)
             processing_notes.append(f"Found {len(key_dates)} key dates")
-            print(f"  ✅ Found {len(key_dates)} key dates")
+            print(f"  [SUCCESS] Found {len(key_dates)} key dates")
             
         except Exception as e:
-            print(f"  ❌ Error during contract analysis: {e}")
+            print(f"  [ERROR] Error during contract analysis: {e}")
             # Return basic analysis on error
             return ContractAnalysis(
                 contract_type="other",
@@ -117,7 +117,7 @@ class ContractIntelligenceEngine:
                 processing_notes=[f"Error during analysis: {str(e)}"]
             )
         
-        print(f"  🎉 Contract analysis completed successfully!")
+        print(f"  [SUCCESS] Contract analysis completed successfully!")
         
         return ContractAnalysis(
             contract_type=contract_type,

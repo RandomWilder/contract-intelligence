@@ -1,0 +1,5 @@
+[33m1eb212d1a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;33mtag: [m[1;33mv1.4.21[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m v1.4.21 Fix variable scope issue - pass config as parameter to nested function
+[33m2833be873[m[33m ([m[1;33mtag: [m[1;33mv1.4.20[m[33m)[m v1.4.20 Fix Streamlit metadata packaging and add fallback launch method
+[33m734ced93e[m[33m ([m[1;33mtag: [m[1;33mv1.4.19[m[33m)[m v1.4.19 Replace subprocess Streamlit with embedded server - fixes page unreachable issue
+[33m76243f093[m[33m ([m[1;33mtag: [m[1;33mv1.4.18[m[33m)[m v1.4.18 Eliminate ONNX model dependencies - force OpenAI ada-002 embeddings only
+[33ma2b1ab017[m[33m ([m[1;33mtag: [m[1;33mv1.4.17[m[33m)[m v1.4.17 Complete wizard flow fix - environment variables, dependency checks, error handling, and config fallback
