@@ -45,6 +45,16 @@ for data_dir in data_dirs:
     if data_path.exists():
         added_files.append((str(data_path), data_dir))
 
+# Collect package metadata for Streamlit (CRITICAL for embedded launch)
+import pkg_resources
+try:
+    streamlit_dist = pkg_resources.get_distribution('streamlit')
+    streamlit_metadata_path = streamlit_dist.egg_info
+    if streamlit_metadata_path and os.path.exists(streamlit_metadata_path):
+        added_files.append((streamlit_metadata_path, 'streamlit.dist-info'))
+except:
+    pass  # Fallback if pkg_resources fails
+
 a = Analysis(
     [main_script],
     pathex=[str(spec_dir)],
@@ -53,9 +63,15 @@ a = Analysis(
     hiddenimports=[
         'streamlit',
         'streamlit.web.cli',
+        'streamlit.web.bootstrap',
         'streamlit.runtime',
         'streamlit.runtime.scriptrunner',
         'streamlit.runtime.state',
+        'streamlit.runtime.app_session',
+        'streamlit.runtime.caching',
+        'streamlit.runtime.media_file_manager',
+        'streamlit.web.server',
+        'streamlit.web.server.server',
         'chromadb',
         'chromadb.utils.embedding_functions',
         'chromadb.utils.embedding_functions.openai_embedding_function',

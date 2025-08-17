@@ -417,34 +417,50 @@ class ContractIntelligenceSetup:
                     print(f"✅ Environment variables set: OPENAI_API_KEY, GOOGLE_APPLICATION_CREDENTIALS")
                     print("🚀 Starting embedded Streamlit server...")
                     
-                    # Import and run Streamlit directly (embedded approach)
-                    import streamlit.web.bootstrap
-                    
-                    # Configure Streamlit server options
-                    streamlit_args = [
-                        "streamlit", "run", str(streamlit_app),
-                        "--server.headless=true",
-                        "--server.address=0.0.0.0", 
-                        "--server.port=8501",
-                        "--browser.gatherUsageStats=false",
-                        "--server.enableCORS=false",
-                        "--server.enableXsrfProtection=false"
-                    ]
-                    
-                    # Run Streamlit directly without subprocess
-                    streamlit.web.bootstrap.run(
-                        str(streamlit_app),
-                        command_line="streamlit run",
-                        args=streamlit_args[2:],  # Skip 'streamlit run' part
-                        flag_options={
-                            "server.headless": True,
-                            "server.address": "0.0.0.0",
-                            "server.port": 8501,
-                            "browser.gatherUsageStats": False,
-                            "server.enableCORS": False,
-                            "server.enableXsrfProtection": False
-                        }
-                    )
+                    # Try embedded Streamlit approach first
+                    try:
+                        import streamlit.web.bootstrap
+                        
+                        # Run Streamlit directly without subprocess
+                        streamlit.web.bootstrap.run(
+                            str(streamlit_app),
+                            command_line="streamlit run",
+                            args=[
+                                "--server.headless=true",
+                                "--server.address=0.0.0.0", 
+                                "--server.port=8501",
+                                "--browser.gatherUsageStats=false",
+                                "--server.enableCORS=false",
+                                "--server.enableXsrfProtection=false"
+                            ],
+                            flag_options={
+                                "server.headless": True,
+                                "server.address": "0.0.0.0",
+                                "server.port": 8501,
+                                "browser.gatherUsageStats": False,
+                                "server.enableCORS": False,
+                                "server.enableXsrfProtection": False
+                            }
+                        )
+                        
+                    except Exception as bootstrap_error:
+                        print(f"⚠️ Embedded Streamlit failed: {bootstrap_error}")
+                        print("🔄 Trying alternative Streamlit launch method...")
+                        
+                        # Fallback: Try direct server approach
+                        import streamlit.web.server.server as server
+                        import streamlit.config as config
+                        
+                        # Configure Streamlit
+                        config.set_option("server.headless", True)
+                        config.set_option("server.address", "0.0.0.0")
+                        config.set_option("server.port", 8501)
+                        config.set_option("browser.gatherUsageStats", False)
+                        config.set_option("server.enableCORS", False)
+                        config.set_option("server.enableXsrfProtection", False)
+                        
+                        # Start server directly
+                        server.start(str(streamlit_app))
                     
                     print("✅ Embedded Streamlit server started successfully")
                     print("🚀 Streamlit should be available at: http://localhost:8501")
