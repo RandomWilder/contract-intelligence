@@ -6,6 +6,8 @@ class ContractIntelligenceApp {
         this.isBackendReady = false;
         this.currentFile = null;
         this.documents = [];
+        this.documentsByFolder = {};
+        this.contextMenuTarget = null;
         
         this.init();
     }
@@ -57,6 +59,21 @@ class ContractIntelligenceApp {
         chatInput.addEventListener('input', (e) => {
             e.target.style.height = 'auto';
             e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+        });
+
+        // Context menu - hide on click outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#context-menu')) {
+                this.hideContextMenu();
+            }
+        });
+
+        // Context menu actions
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.context-menu-item')) {
+                const action = e.target.closest('.context-menu-item').dataset.action;
+                this.handleContextMenuAction(action);
+            }
         });
     }
 
@@ -156,16 +173,18 @@ class ContractIntelligenceApp {
             const data = await response.json();
             
             this.documents = data.documents || [];
-            this.renderDocumentsList(data.documents_by_folder || {});
-            this.updateFolderSelect(Object.keys(data.documents_by_folder || {}));
+            this.documentsByFolder = data.documents_by_folder || {};
+            this.renderDocumentsTree(this.documentsByFolder);
+            this.updateFolderSelect(Object.keys(this.documentsByFolder));
+            this.updateFolderScopeSelect(Object.keys(this.documentsByFolder));
             
         } catch (error) {
             console.error('Failed to load documents:', error);
         }
     }
 
-    renderDocumentsList(documentsByFolder) {
-        const container = document.getElementById('documents-list');
+    renderDocumentsTree(documentsByFolder) {
+        const container = document.getElementById('documents-tree');
         
         if (Object.keys(documentsByFolder).length === 0) {
             container.innerHTML = '<p class="empty-state">No documents yet</p>';
@@ -174,23 +193,109 @@ class ContractIntelligenceApp {
         
         let html = '';
         for (const [folder, docs] of Object.entries(documentsByFolder)) {
-            html += `<div class="folder-section">
-                <h4>📁 ${folder} (${docs.length})</h4>`;
+            const folderId = `folder-${folder.replace(/\s+/g, '-').toLowerCase()}`;
+            html += `
+                <div class="tree-folder">
+                    <div class="folder-header" data-folder="${folder}" data-folder-id="${folderId}">
+                        <span class="folder-toggle" id="${folderId}-toggle">▶</span>
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">${folder}</span>
+                        <span class="folder-count">${docs.length}</span>
+                    </div>
+                    <div class="folder-documents" id="${folderId}-docs">`;
             
             for (const doc of docs) {
+                const docIcon = this.getDocumentIcon(doc);
                 html += `
-                    <div class="document-item">
-                        <span class="document-name">📄 ${doc}</span>
-                        <div class="document-actions">
-                            <button class="delete-btn" onclick="app.deleteDocument('${doc}')">🗑️</button>
-                        </div>
+                    <div class="document-item" data-document="${doc}" data-folder="${folder}">
+                        <span class="document-icon">${docIcon}</span>
+                        <span class="document-name" title="${doc}">${doc}</span>
                     </div>
                 `;
             }
-            html += '</div>';
+            html += `
+                    </div>
+                </div>
+            `;
         }
         
         container.innerHTML = html;
+        
+        // Add event listeners after rendering
+        this.attachTreeEventListeners();
+    }
+
+    getDocumentIcon(filename) {
+        const extension = filename.split('.').pop().toLowerCase();
+        switch (extension) {
+            case 'pdf': return '📄';
+            case 'docx':
+            case 'doc': return '📝';
+            case 'txt': return '📃';
+            case 'jpg':
+            case 'jpeg':
+            case 'png':
+            case 'gif': return '🖼️';
+            default: return '📄';
+        }
+    }
+
+    attachTreeEventListeners() {
+        // Folder click handlers
+        const folderHeaders = document.querySelectorAll('.folder-header');
+        folderHeaders.forEach(header => {
+            // Click to toggle folder
+            header.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const folderId = header.dataset.folderId;
+                this.toggleFolder(folderId);
+            });
+            
+            // Right-click context menu for folders
+            header.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const folderName = header.dataset.folder;
+                this.showContextMenu(e, 'folder', folderName);
+            });
+        });
+        
+        // Document right-click handlers
+        const documentItems = document.querySelectorAll('.document-item');
+        documentItems.forEach(item => {
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const documentName = item.dataset.document;
+                const folderName = item.dataset.folder;
+                this.showContextMenu(e, 'document', documentName, folderName);
+            });
+            
+            // Optional: Double-click to open document
+            item.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                const documentName = item.dataset.document;
+                const folderName = item.dataset.folder;
+                this.openItem('document', documentName, folderName);
+            });
+        });
+    }
+
+    toggleFolder(folderId) {
+        const docsContainer = document.getElementById(`${folderId}-docs`);
+        const toggle = document.getElementById(`${folderId}-toggle`);
+        
+        if (docsContainer && toggle) {
+            if (docsContainer.classList.contains('expanded')) {
+                docsContainer.classList.remove('expanded');
+                toggle.classList.remove('expanded');
+                toggle.textContent = '▶';
+            } else {
+                docsContainer.classList.add('expanded');
+                toggle.classList.add('expanded');
+                toggle.textContent = '▼';
+            }
+        }
     }
 
     updateFolderSelect(folders) {
@@ -201,6 +306,15 @@ class ContractIntelligenceApp {
             if (folder !== 'General') {
                 select.innerHTML += `<option value="${folder}">${folder}</option>`;
             }
+        });
+    }
+
+    updateFolderScopeSelect(folders) {
+        const select = document.getElementById('folder-scope-select');
+        select.innerHTML = '<option value="all">All Folders</option>';
+        
+        folders.forEach(folder => {
+            select.innerHTML += `<option value="${folder}">${folder}</option>`;
         });
     }
 
@@ -342,14 +456,16 @@ class ContractIntelligenceApp {
         sendButton.textContent = '⏳ Thinking...';
         
         try {
-            // Get scope
+            // Get scope and folder
             const scopeSelect = document.getElementById('scope-select');
+            const folderScopeSelect = document.getElementById('folder-scope-select');
             const scope = scopeSelect.value;
+            const folderScope = folderScopeSelect.value;
             
             const requestData = {
                 query: query,
                 target_documents: scope === 'all' ? null : [scope],
-                target_folder: null
+                target_folder: folderScope === 'all' ? null : folderScope
             };
             
             const response = await fetch(`${this.backendUrl}/api/chat`, {
@@ -586,6 +702,150 @@ class ContractIntelligenceApp {
                 toast.remove();
             }
         }, 5000);
+    }
+
+    // Context Menu functionality
+    showContextMenu(event, type, name, folder = null) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const contextMenu = document.getElementById('context-menu');
+        this.contextMenuTarget = { type, name, folder };
+        
+        // Show menu first to get dimensions
+        contextMenu.style.display = 'block';
+        contextMenu.style.left = '0px';
+        contextMenu.style.top = '0px';
+        
+        // Get menu dimensions
+        const rect = contextMenu.getBoundingClientRect();
+        
+        // Calculate position
+        let x = event.clientX;
+        let y = event.clientY;
+        
+        // Adjust if menu would go off screen
+        if (x + rect.width > window.innerWidth) {
+            x = window.innerWidth - rect.width - 5;
+        }
+        if (y + rect.height > window.innerHeight) {
+            y = window.innerHeight - rect.height - 5;
+        }
+        
+        // Position the menu
+        contextMenu.style.left = x + 'px';
+        contextMenu.style.top = y + 'px';
+        
+        console.log(`Context menu shown for ${type}: ${name}${folder ? ` in ${folder}` : ''}`);
+    }
+
+    hideContextMenu() {
+        const contextMenu = document.getElementById('context-menu');
+        contextMenu.style.display = 'none';
+        this.contextMenuTarget = null;
+    }
+
+    handleContextMenuAction(action) {
+        if (!this.contextMenuTarget) return;
+        
+        const { type, name, folder } = this.contextMenuTarget;
+        this.hideContextMenu();
+        
+        switch (action) {
+            case 'open':
+                this.openItem(type, name, folder);
+                break;
+            case 'rename':
+                this.renameItem(type, name, folder);
+                break;
+            case 'delete':
+                this.deleteItemWithConfirmation(type, name, folder);
+                break;
+            case 'properties':
+                this.showItemProperties(type, name, folder);
+                break;
+        }
+    }
+
+    openItem(type, name, folder) {
+        if (type === 'document') {
+            this.showNotification(`Opening ${name}...`, 'info');
+            // TODO: Implement document opening functionality
+        } else if (type === 'folder') {
+            const folderId = `folder-${name.replace(/\s+/g, '-').toLowerCase()}`;
+            this.toggleFolder(folderId);
+        }
+    }
+
+    renameItem(type, name, folder) {
+        const newName = prompt(`Enter new name for ${type}:`, name);
+        if (newName && newName.trim() && newName.trim() !== name) {
+            this.showNotification(`Renaming ${type} functionality coming soon...`, 'info');
+            // TODO: Implement rename functionality
+        }
+    }
+
+    async deleteItemWithConfirmation(type, name, folder) {
+        let confirmMessage;
+        if (type === 'folder') {
+            const folderDocs = this.documents.filter(doc => 
+                Object.entries(this.documentsByFolder || {}).some(([f, docs]) => 
+                    f === name && docs.includes(doc)
+                )
+            );
+            confirmMessage = `Delete folder "${name}" and all ${folderDocs.length} documents inside it?\n\nThis action cannot be undone.`;
+        } else {
+            confirmMessage = `Delete document "${name}"?\n\nThis action cannot be undone.`;
+        }
+        
+        if (confirm(confirmMessage)) {
+            if (type === 'document') {
+                await this.deleteDocument(name);
+            } else if (type === 'folder') {
+                await this.deleteFolder(name);
+            }
+        }
+    }
+
+    async deleteFolder(folderName) {
+        try {
+            this.showProgress(`Deleting folder "${folderName}"...`);
+            
+            const response = await fetch(`${this.backendUrl}/api/folders/${encodeURIComponent(folderName)}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showSuccess(`Folder "${folderName}" deleted successfully`);
+                await this.loadDocuments();
+                await this.updateStatus();
+            } else {
+                this.showError(result.message || 'Failed to delete folder');
+            }
+            
+        } catch (error) {
+            console.error('Delete folder failed:', error);
+            this.showError('Failed to delete folder: ' + error.message);
+        } finally {
+            this.hideProgress();
+        }
+    }
+
+    showItemProperties(type, name, folder) {
+        let info = `${type.charAt(0).toUpperCase() + type.slice(1)}: ${name}`;
+        if (folder && type === 'document') {
+            info += `\nFolder: ${folder}`;
+        }
+        if (type === 'folder') {
+            const folderDocs = Object.entries(this.documentsByFolder || {})
+                .find(([f, docs]) => f === name)?.[1] || [];
+            info += `\nDocuments: ${folderDocs.length}`;
+        }
+        
+        alert(info);
+        // TODO: Implement proper properties dialog
     }
 }
 

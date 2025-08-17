@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: electron-app/package-lock.json
+          cache-dependency-path: ragflow/electron-app/package-lock.json
 
       - name: Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
@@ -52,16 +52,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('ragflow/backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install Node.js dependencies
-        working-directory: electron-app
+        working-directory: ragflow/electron-app
         run: npm ci
 
       - name: Install Python dependencies
-        working-directory: backend
+        working-directory: ragflow/backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -69,23 +69,36 @@ jobs:
       - name: Prepare Python backend for bundling
         shell: bash
         run: |
-          # Create python-backend directory
-          mkdir -p electron-app/python-backend
+          # Create python-backend directory in electron-app
+          mkdir -p ragflow/electron-app/python-backend
           
-          # Copy backend directory if it exists
-          if [ -d "backend" ]; then
-            cp -r backend/* electron-app/python-backend/
+          # Copy backend directory contents
+          if [ -d "ragflow/backend" ]; then
+            cp -r ragflow/backend/* ragflow/electron-app/python-backend/
           fi
           
-          # Copy Python files that exist
-          for file in *.py; do
+          # Copy essential Python files from ragflow root to electron-app/python-backend
+          cd ragflow
+          for file in contract_intelligence.py streamlit_app.py utils.py; do
             if [ -f "$file" ]; then
               cp "$file" electron-app/python-backend/
             fi
           done
+          
+          # Copy requirements.txt if it exists at root
+          if [ -f "requirements_desktop.txt" ]; then
+            cp requirements_desktop.txt electron-app/python-backend/requirements.txt
+          fi
+
+      - name: Verify backend preparation
+        working-directory: ragflow/electron-app
+        run: |
+          echo "Contents of python-backend directory:"
+          ls -la python-backend/ || echo "python-backend directory not found"
+        shell: bash
 
       - name: Update Electron app package.json version
-        working-directory: electron-app
+        working-directory: ragflow/electron-app
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
@@ -93,16 +106,100 @@ jobs:
           fi
         shell: bash
 
+      - name: Generate required icon formats
+        working-directory: ragflow/electron-app
+        run: |
+          # Verify source icon exists
+          if [ ! -f "build/icon.png" ]; then
+            echo "ERROR: build/icon.png not found. Cannot generate platform icons."
+            exit 1
+          fi
+          
+          # Install ImageMagick for Windows builds on Linux runner
+          if [[ "${{ matrix.platform }}" == "win" ]] && [[ "${{ runner.os }}" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+          fi
+          
+          # Generate ICO for Windows (multi-resolution embedded)
+          if [[ "${{ matrix.platform }}" == "win" ]]; then
+            if command -v convert >/dev/null 2>&1; then
+              convert build/icon.png -resize 256x256 \
+                \( -clone 0 -resize 16x16 \) \
+                \( -clone 0 -resize 32x32 \) \
+                \( -clone 0 -resize 48x48 \) \
+                \( -clone 0 -resize 64x64 \) \
+                \( -clone 0 -resize 128x128 \) \
+                -delete 0 build/icon.ico
+              echo "Generated build/icon.ico"
+            else
+              echo "ERROR: ImageMagick not available. Cannot generate ICO file."
+              exit 1
+            fi
+          fi
+          
+          # Generate ICNS for macOS
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+              # Create iconset directory
+              mkdir -p build/icon.iconset
+              
+              # Generate all required sizes with error checking
+              sips -z 16 16 build/icon.png --out build/icon.iconset/icon_16x16.png
+              sips -z 32 32 build/icon.png --out build/icon.iconset/icon_16x16@2x.png
+              sips -z 32 32 build/icon.png --out build/icon.iconset/icon_32x32.png
+              sips -z 64 64 build/icon.png --out build/icon.iconset/icon_32x32@2x.png
+              sips -z 128 128 build/icon.png --out build/icon.iconset/icon_128x128.png
+              sips -z 256 256 build/icon.png --out build/icon.iconset/icon_128x128@2x.png
+              sips -z 256 256 build/icon.png --out build/icon.iconset/icon_256x256.png
+              sips -z 512 512 build/icon.png --out build/icon.iconset/icon_256x256@2x.png
+              sips -z 512 512 build/icon.png --out build/icon.iconset/icon_512x512.png
+              sips -z 1024 1024 build/icon.png --out build/icon.iconset/icon_512x512@2x.png
+              
+              # Convert to icns
+              iconutil -c icns build/icon.iconset -o build/icon.icns
+              rm -rf build/icon.iconset
+              echo "Generated build/icon.icns"
+            else
+              echo "ERROR: sips or iconutil not available. Cannot generate ICNS file."
+              exit 1
+            fi
+          fi
+
+      - name: Verify build assets
+        working-directory: ragflow/electron-app
+        run: |
+          echo "Build assets verification:"
+          ls -la build/
+          
+          # Verify platform-specific icons
+          if [[ "${{ matrix.platform }}" == "win" ]] && [ ! -f "build/icon.ico" ]; then
+            echo "ERROR: build/icon.ico required for Windows build"
+            exit 1
+          fi
+          
+          if [[ "${{ matrix.platform }}" == "mac" ]] && [ ! -f "build/icon.icns" ]; then
+            echo "ERROR: build/icon.icns required for macOS build"
+            exit 1
+          fi
+          
+          # Verify critical application files
+          [ -f "main.js" ] || { echo "ERROR: main.js not found"; exit 1; }
+          [ -f "package.json" ] || { echo "ERROR: package.json not found"; exit 1; }
+          [ -d "python-backend" ] || { echo "ERROR: python-backend directory not found"; exit 1; }
+          
+          echo "All build assets verified successfully."
+
       - name: Build Electron app (Windows)
         if: matrix.platform == 'win'
-        working-directory: electron-app
+        working-directory: ragflow/electron-app
         run: npm run build-win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Electron app (macOS)
         if: matrix.platform == 'mac'
-        working-directory: electron-app
+        working-directory: ragflow/electron-app
         run: npm run build-mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,17 +210,20 @@ jobs:
           # APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
 
       - name: Verify build output
-        working-directory: electron-app
+        working-directory: ragflow/electron-app
         run: |
           echo "Build completed. Contents of dist directory:"
-          ls -la dist/
+          ls -la dist/ || echo "No dist directory found"
+          
+          # List all built artifacts
+          find dist/ -name "*.${{ matrix.installer-ext }}" || echo "No ${{ matrix.installer-ext }} files found"
         shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: electron-app/dist/*.${{ matrix.installer-ext }}
+          path: ragflow/electron-app/dist/*.${{ matrix.installer-ext }}
           retention-days: 90
 
   release:
@@ -151,7 +251,7 @@ jobs:
 
       - name: Create release notes
         run: |
-          cat > release_notes.md << EOF
+          cat > release_notes.md << 'EOF'
           # Contract Intelligence Platform ${{ steps.tag.outputs.tag }} - Electron Edition
           
           ## 🚀 Modern Desktop Application
@@ -169,12 +269,12 @@ jobs:
           ### 📦 Installation:
           
           **Windows:**
-          1. Download \`Contract Intelligence Platform Setup *.exe\`
+          1. Download `Contract Intelligence Platform Setup *.exe`
           2. Run the installer and follow the setup wizard
           3. Launch the application from Start Menu or Desktop
           
           **macOS:**
-          1. Download \`Contract Intelligence Platform-*.dmg\`
+          1. Download `Contract Intelligence Platform-*.dmg`
           2. Open the DMG and drag the app to Applications
           3. **IMPORTANT**: Right-click the app → "Open" (bypasses security warning)
           4. Click "Open" when prompted about unidentified developer
@@ -184,8 +284,8 @@ jobs:
           - **Google Cloud Vision credentials** (JSON file for OCR)
           - Windows 10+ or macOS 10.14+
           
-          ### 🔄 Migration from Streamlit Version:
-          - The Electron app uses a separate database (\`contracts_electron\`)
+          ### 📄 Migration from Streamlit Version:
+          - The Electron app uses a separate database (`contracts_electron`)
           - Your existing Streamlit data remains untouched
           - Re-upload documents to use them in the Electron app
           
@@ -208,4 +308,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

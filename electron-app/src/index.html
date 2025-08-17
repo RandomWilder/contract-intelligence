@@ -36,6 +36,34 @@
             </div>
         </header>
 
+        <!-- Chat Controls Section -->
+        <div class="chat-controls-section">
+            <div class="chat-controls">
+                <div class="control-group">
+                    <label for="model-select">🤖 AI Model:</label>
+                    <select id="model-select" class="model-select">
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="gpt-4o">gpt-4o</option>
+                        <option value="gpt-4">gpt-4</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="folder-scope-select">📁 Folder:</label>
+                    <select id="folder-scope-select" class="folder-scope-select">
+                        <option value="all">All Folders</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="scope-select">📄 Document Scope:</label>
+                    <select id="scope-select" class="scope-select">
+                        <option value="all">All Documents</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <div class="main-content">
             <!-- Left Sidebar -->
@@ -86,8 +114,31 @@
                 <!-- Documents List -->
                 <div class="section">
                     <h3>📋 Documents</h3>
-                    <div id="documents-list" class="documents-list">
-                        <p class="empty-state">No documents yet</p>
+                    <div class="documents-tree-container">
+                        <div id="documents-tree" class="documents-tree">
+                            <p class="empty-state">No documents yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Context Menu -->
+                <div id="context-menu" class="context-menu" style="display: none;">
+                    <div class="context-menu-item" data-action="open">
+                        <span class="context-icon">📄</span>
+                        <span>Open</span>
+                    </div>
+                    <div class="context-menu-item" data-action="rename">
+                        <span class="context-icon">✏️</span>
+                        <span>Rename</span>
+                    </div>
+                    <div class="context-menu-separator"></div>
+                    <div class="context-menu-item" data-action="delete">
+                        <span class="context-icon">🗑️</span>
+                        <span>Delete</span>
+                    </div>
+                    <div class="context-menu-item" data-action="properties">
+                        <span class="context-icon">ℹ️</span>
+                        <span>Properties</span>
                     </div>
                 </div>
 
@@ -112,18 +163,6 @@
                     </div>
                     
                     <div class="chat-input-container">
-                        <div class="chat-controls">
-                            <select id="model-select" class="model-select">
-                                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                                <option value="gpt-4o">gpt-4o</option>
-                                <option value="gpt-4">gpt-4</option>
-                            </select>
-                            
-                            <select id="scope-select" class="scope-select">
-                                <option value="all">All Documents</option>
-                            </select>
-                        </div>
-                        
                         <div class="chat-input-wrapper">
                             <textarea 
                                 id="chat-input" 
