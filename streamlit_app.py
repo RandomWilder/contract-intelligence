@@ -39,8 +39,19 @@ OPENAI_CHAT_MODELS = [
 
 # RTL Language Detection and Styling
 def detect_rtl(text):
-    """Detect if text contains RTL characters (Hebrew, Arabic, etc.)"""
+    """Detect if text contains RTL characters (Hebrew, Arabic, etc.) with improved logic"""
+    if not text:
+        return False
+    
+    # RTL character ranges: Hebrew, Arabic, and related scripts
     rtl_chars = re.findall(r'[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]', text)
+    total_chars = len(re.findall(r'[^\s\d\W]', text))  # Count only letters, excluding spaces, digits, punctuation
+    
+    # Consider RTL if RTL characters make up more than 30% of the text letters
+    if total_chars > 0:
+        rtl_ratio = len(rtl_chars) / total_chars
+        return rtl_ratio > 0.3
+    
     return len(rtl_chars) > 0
 
 def inject_rtl_css():
@@ -360,9 +371,13 @@ def inject_rtl_css():
         word-wrap: break-word !important;
     }
     
-    /* Chat message bubbles */
+    /* Chat message bubbles - align all to the right */
     .stChatMessage {
         margin-bottom: 1rem !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        margin-left: 20% !important;
+        margin-right: 0 !important;
     }
     
     /* User message styling */
@@ -370,8 +385,7 @@ def inject_rtl_css():
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
         border-radius: 18px 18px 4px 18px !important;
-        margin-left: 20% !important;
-        margin-right: 0 !important;
+        padding: 12px 16px !important;
     }
     
     /* Assistant message styling */
@@ -380,26 +394,62 @@ def inject_rtl_css():
         color: #2c3e50 !important;
         border: 1px solid #e9ecef !important;
         border-radius: 18px 18px 18px 4px !important;
-        margin-left: 0 !important;
-        margin-right: 20% !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        padding: 12px 16px !important;
     }
     
-    /* RTL chat message alignment */
+    /* Align message content and avatars to the right */
+    .stChatMessage > div {
+        display: flex !important;
+        flex-direction: row-reverse !important;
+        align-items: flex-start !important;
+        text-align: right !important;
+    }
+    
+    /* Avatar positioning */
+    .stChatMessage img {
+        margin-left: 0.5rem !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Enhanced RTL chat message styling */
     .rtl-chat-user {
         direction: rtl !important;
         text-align: right !important;
-        margin-left: 0 !important;
-        margin-right: 20% !important;
-        border-radius: 18px 18px 18px 4px !important;
+        unicode-bidi: embed !important;
+        font-family: 'Segoe UI', 'Arial Unicode MS', 'Tahoma', sans-serif !important;
+        line-height: 1.5 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
     }
     
     .rtl-chat-assistant {
         direction: rtl !important;
         text-align: right !important;
-        margin-left: 20% !important;
-        margin-right: 0 !important;
-        border-radius: 18px 18px 4px 18px !important;
+        unicode-bidi: embed !important;
+        font-family: 'Segoe UI', 'Arial Unicode MS', 'Tahoma', sans-serif !important;
+        line-height: 1.5 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+    
+    /* RTL text with proper number and punctuation handling */
+    .rtl-text-content {
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: plaintext !important;
+        font-family: 'Segoe UI', 'Arial Unicode MS', 'Tahoma', sans-serif !important;
+        line-height: 1.6 !important;
+        word-spacing: 0.1em !important;
+    }
+    
+    /* LTR text content for proper English display */
+    .ltr-text-content {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: plaintext !important;
+        font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif !important;
+        line-height: 1.5 !important;
     }
     
     /* Chat input styling */
@@ -455,7 +505,7 @@ def add_chat_message(role, content, metadata=None):
     st.session_state.chat_messages.append(message)
 
 def display_chat_message(message):
-    """Display a chat message with RTL support"""
+    """Display a chat message with enhanced RTL/LTR support"""
     role = message["role"]
     content = message["content"]
     
@@ -464,11 +514,11 @@ def display_chat_message(message):
     
     with st.chat_message(role):
         if is_rtl:
-            # Apply RTL styling for RTL text
-            css_class = "rtl-chat-user" if role == "user" else "rtl-chat-assistant"
-            st.markdown(f'<div class="{css_class}">{content}</div>', unsafe_allow_html=True)
+            # Apply RTL styling with proper text content class
+            st.markdown(f'<div class="rtl-text-content">{content}</div>', unsafe_allow_html=True)
         else:
-            st.markdown(content)
+            # Apply LTR styling for English and other LTR languages
+            st.markdown(f'<div class="ltr-text-content">{content}</div>', unsafe_allow_html=True)
         
         # Display metadata if available (for assistant messages)
         if role == "assistant" and message.get("metadata", {}).get("show_sources"):
@@ -899,7 +949,8 @@ def main():
             else:
                 # Welcome message
                 with st.chat_message("assistant"):
-                    st.markdown("👋 Hello! I'm your Contract Intelligence Assistant. Ask me anything about your uploaded contracts!")
+                    welcome_msg = "👋 שלום! אני עוזר הבינה המלאכותית לחוזים שלך. שאל אותי כל שאלה על החוזים שהעלית!"
+                    st.markdown(f'<div class="rtl-text-content">{welcome_msg}</div>', unsafe_allow_html=True)
         
         # Apply RTL styling to chat input if needed (detect from last user message)
         if st.session_state.chat_messages:

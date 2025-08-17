@@ -404,7 +404,7 @@ class ContractIntelligenceSetup:
             self.root.withdraw()
             
             # Launch Streamlit in separate thread
-            def launch_streamlit():
+            def launch_streamlit(config):
                 try:
                     # Set environment variables for embedded Streamlit
                     os.environ['OPENAI_API_KEY'] = config['openai_api_key']
@@ -473,7 +473,7 @@ class ContractIntelligenceSetup:
                     # Show setup window again when app closes
                     self.root.after(0, self.root.deiconify)
             
-            threading.Thread(target=launch_streamlit, daemon=True).start()
+            threading.Thread(target=launch_streamlit, args=(config,), daemon=True).start()
             
             # Open browser after longer delay to ensure Streamlit is ready
             def open_browser():
