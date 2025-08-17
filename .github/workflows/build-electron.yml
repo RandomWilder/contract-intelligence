@@ -67,14 +67,22 @@ jobs:
           pip install -r requirements.txt
 
       - name: Prepare Python backend for bundling
+        shell: bash
         run: |
-          # Copy Python backend files to electron-app for bundling
+          # Create python-backend directory
           mkdir -p electron-app/python-backend
-          cp -r backend/* electron-app/python-backend/
-          cp -r *.py electron-app/python-backend/ 2>/dev/null || true
-          cp -r contract_intelligence.py electron-app/python-backend/ 2>/dev/null || true
-          cp -r utils.py electron-app/python-backend/ 2>/dev/null || true
-          cp -r local_rag_app.py electron-app/python-backend/ 2>/dev/null || true
+          
+          # Copy backend directory if it exists
+          if [ -d "backend" ]; then
+            cp -r backend/* electron-app/python-backend/
+          fi
+          
+          # Copy Python files that exist
+          for file in *.py; do
+            if [ -f "$file" ]; then
+              cp "$file" electron-app/python-backend/
+            fi
+          done
 
       - name: Update Electron app package.json version
         working-directory: electron-app
