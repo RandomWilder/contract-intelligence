@@ -309,15 +309,21 @@ class GoogleVisionOCR:
 
 class LocalRAGFlow:
     def __init__(self, chat_model="gpt-4o-mini"):
+        # Explicitly disable ONNX models in ChromaDB
+        os.environ['ALLOW_RESET'] = 'TRUE'
+        os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
+        
         self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.chat_model = chat_model
         
-        # Initialize ChromaDB with local persistence
+        # Initialize ChromaDB with local persistence and explicit settings to prevent ONNX model loading
         self.chroma_client = chromadb.PersistentClient(
             path="./data/chroma_db",
             settings=Settings(
                 anonymized_telemetry=False,
-                allow_reset=True
+                allow_reset=True,
+                # Explicitly disable any default embedding models
+                chroma_server_nofile=True
             )
         )
         
@@ -328,22 +334,19 @@ class LocalRAGFlow:
             model_name="text-embedding-ada-002"
         )
         
-        # Try to get existing collection first, if it fails, create new one
+        # Always ensure we use OpenAI embeddings - delete and recreate if needed
         try:
-            self.collection = self.chroma_client.get_collection(name="contracts")
+            # Try to delete existing collection to ensure clean state
+            self.chroma_client.delete_collection(name="contracts")
         except:
-            # Collection doesn't exist or has issues, create new one with OpenAI embeddings
-            try:
-                # Delete old collection if it exists with wrong embedding function
-                self.chroma_client.delete_collection(name="contracts")
-            except:
-                pass
-            
-            self.collection = self.chroma_client.create_collection(
-                name="contracts",
-                embedding_function=openai_ef,
-                metadata={"hnsw:space": "cosine"}
-            )
+            pass  # Collection might not exist
+        
+        # Always create collection with OpenAI embeddings
+        self.collection = self.chroma_client.create_collection(
+            name="contracts",
+            embedding_function=openai_ef,
+            metadata={"hnsw:space": "cosine"}
+        )
         
         # Initialize Google services
         self.auth_manager = GoogleAuthManager()

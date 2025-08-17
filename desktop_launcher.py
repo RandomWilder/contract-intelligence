@@ -347,7 +347,7 @@ class ContractIntelligenceSetup:
         threading.Thread(target=send_async, daemon=True).start()
     
     def check_dependencies(self):
-        """Check if all required dependencies are available"""
+        """Check if all required dependencies are available without triggering model loading"""
         required_modules = [
             'streamlit',
             'openai', 
@@ -360,7 +360,11 @@ class ContractIntelligenceSetup:
         missing_modules = []
         for module in required_modules:
             try:
-                __import__(module)
+                # Use importlib to avoid triggering module initialization
+                import importlib.util
+                spec = importlib.util.find_spec(module)
+                if spec is None:
+                    missing_modules.append(module)
             except ImportError:
                 missing_modules.append(module)
         

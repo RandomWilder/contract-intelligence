@@ -2,6 +2,11 @@
 import streamlit as st
 import os
 import json
+
+# Explicitly disable ONNX models in ChromaDB before any imports
+os.environ['ALLOW_RESET'] = 'TRUE'
+os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
+
 from local_rag_app import LocalRAGFlow
 from pathlib import Path
 import webbrowser

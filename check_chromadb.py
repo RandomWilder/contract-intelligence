@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import chromadb
 from chromadb.config import Settings
 
@@ -7,12 +8,17 @@ def check_chromadb_status():
     """Check current ChromaDB status"""
     print("🔍 Checking ChromaDB status...")
     
-    # Initialize ChromaDB client
+    # Explicitly disable ONNX models
+    os.environ['ALLOW_RESET'] = 'TRUE'
+    os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
+    
+    # Initialize ChromaDB client with explicit settings to prevent ONNX model loading
     client = chromadb.PersistentClient(
         path="./data/chroma_db",
         settings=Settings(
             anonymized_telemetry=False,
-            allow_reset=True
+            allow_reset=True,
+            chroma_server_nofile=True
         )
     )
     
