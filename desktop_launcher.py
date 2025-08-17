@@ -406,43 +406,53 @@ class ContractIntelligenceSetup:
             # Launch Streamlit in separate thread
             def launch_streamlit():
                 try:
+                    # Set environment variables for embedded Streamlit
+                    os.environ['OPENAI_API_KEY'] = config['openai_api_key']
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(get_google_credentials_path())
+                    
                     # Get the directory where this script is located
                     app_dir = Path(__file__).parent
                     streamlit_app = app_dir / "streamlit_app.py"
                     
-                    # Prepare environment variables for subprocess
-                    env = os.environ.copy()
-                    env['OPENAI_API_KEY'] = config['openai_api_key']
-                    env['GOOGLE_APPLICATION_CREDENTIALS'] = str(get_google_credentials_path())
+                    print(f"✅ Environment variables set: OPENAI_API_KEY, GOOGLE_APPLICATION_CREDENTIALS")
+                    print("🚀 Starting embedded Streamlit server...")
                     
-                    # Launch Streamlit with proper network binding and environment
-                    # Use Popen for non-blocking execution and 0.0.0.0 for better compatibility
-                    process = subprocess.Popen([
-                        sys.executable, "-m", "streamlit", "run", 
-                        str(streamlit_app),
+                    # Import and run Streamlit directly (embedded approach)
+                    import streamlit.web.bootstrap
+                    
+                    # Configure Streamlit server options
+                    streamlit_args = [
+                        "streamlit", "run", str(streamlit_app),
                         "--server.headless=true",
-                        "--server.address=0.0.0.0",
+                        "--server.address=0.0.0.0", 
                         "--server.port=8501",
                         "--browser.gatherUsageStats=false",
                         "--server.enableCORS=false",
                         "--server.enableXsrfProtection=false"
-                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+                    ]
                     
-                    print(f"✅ Streamlit process started with PID: {process.pid}")
-                    print(f"✅ Environment variables set: OPENAI_API_KEY, GOOGLE_APPLICATION_CREDENTIALS")
+                    # Run Streamlit directly without subprocess
+                    streamlit.web.bootstrap.run(
+                        str(streamlit_app),
+                        command_line="streamlit run",
+                        args=streamlit_args[2:],  # Skip 'streamlit run' part
+                        flag_options={
+                            "server.headless": True,
+                            "server.address": "0.0.0.0",
+                            "server.port": 8501,
+                            "browser.gatherUsageStats": False,
+                            "server.enableCORS": False,
+                            "server.enableXsrfProtection": False
+                        }
+                    )
+                    
+                    print("✅ Embedded Streamlit server started successfully")
                     print("🚀 Streamlit should be available at: http://localhost:8501")
                     
-                    # Monitor the process for any immediate errors
-                    time.sleep(2)  # Give it a moment to start
-                    if process.poll() is not None:
-                        # Process has already terminated
-                        stdout, stderr = process.communicate()
-                        error_msg = f"Streamlit failed to start:\nSTDOUT: {stdout}\nSTDERR: {stderr}"
-                        print(f"❌ {error_msg}")
-                        messagebox.showerror("Streamlit Error", error_msg)
-                        return
                 except Exception as e:
-                    messagebox.showerror("Launch Error", f"Failed to launch app: {e}")
+                    error_msg = f"Failed to start embedded Streamlit: {str(e)}"
+                    print(f"❌ {error_msg}")
+                    messagebox.showerror("Launch Error", error_msg)
                 finally:
                     # Show setup window again when app closes
                     self.root.after(0, self.root.deiconify)
