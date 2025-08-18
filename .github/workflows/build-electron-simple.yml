@@ -235,20 +235,48 @@ jobs:
             ls -la resources/api_server
           fi
 
+      - name: Verify final build structure
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Final verification before electron-builder..."
+          echo "Current directory contents:"
+          ls -la
+          echo ""
+          echo "Resources directory contents:"
+          ls -la resources/ || echo "No resources directory"
+          echo ""
+          echo "Package.json extraResources configuration:"
+          grep -A 10 "extraResources" package.json || echo "No extraResources found"
+
       - name: Build Electron app
         working-directory: electron-app
         shell: bash
         run: |
-          echo "Starting electron-builder with verbose logging..."
+          echo "Starting electron-builder with comprehensive configuration..."
+          
+          # Set additional environment variables for electron-builder
+          export DEBUG=electron-builder*
+          export ELECTRON_CACHE=${{ runner.temp }}/electron-cache
+          export ELECTRON_BUILDER_CACHE=${{ runner.temp }}/electron-builder-cache
+          
+          # Ensure directories exist
+          mkdir -p "$ELECTRON_CACHE" "$ELECTRON_BUILDER_CACHE"
+          
+          # Build with platform-specific command
           if [ "${{ matrix.platform }}" = "win" ]; then
-            DEBUG=electron-builder npm run build-win
+            echo "Building for Windows with NSIS..."
+            npm run build-win -- --publish=never
           elif [ "${{ matrix.platform }}" = "mac" ]; then
-            DEBUG=electron-builder npm run build-mac
+            echo "Building for macOS with DMG..."
+            npm run build-mac -- --publish=never
           else
-            DEBUG=electron-builder npm run build
+            echo "Building for current platform..."
+            npm run build -- --publish=never
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
 
       - name: Verify build output
         working-directory: electron-app

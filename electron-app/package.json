@@ -1,6 +1,6 @@
 {
   "name": "contract-intelligence-desktop",
-  "version": "1.5.14",
+  "version": "1.5.15",
   "description": "Contract Intelligence Platform - Desktop App",
   "main": "main.js",
   "scripts": {
@@ -34,11 +34,17 @@
     "files": [
       "main.js",
       "src/**/*",
-      "package.json",
-      "resources/**/*"
+      "package.json"
     ],
     "extraResources": [
-      "resources/api_server*"
+      {
+        "from": "resources/",
+        "to": ".",
+        "filter": ["**/*"]
+      }
+    ],
+    "asarUnpack": [
+      "resources/**/*"
     ],
     "win": {
       "target": "nsis",
