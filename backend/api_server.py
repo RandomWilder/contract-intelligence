@@ -121,6 +121,112 @@ async def get_status():
         "folders": rag_flow.list_folders()
     }
 
+# **NEW: Configuration endpoint for first-run setup**
+@app.post("/api/config/setup")
+async def setup_config(request: Dict[str, Any]):
+    """Setup API keys and credentials for first-run experience"""
+    global rag_flow
+    
+    try:
+        openai_key = request.get("openai_key", "").strip()
+        google_creds_path = request.get("google_creds_path", "").strip()
+        
+        changes_made = []
+        
+        # Setup OpenAI API key
+        if openai_key:
+            # Validate the API key before setting it
+            try:
+                import openai
+                test_client = openai.OpenAI(api_key=openai_key, timeout=10.0)
+                # Quick validation with models.list
+                models = test_client.models.list()
+                if hasattr(models, 'data') and len(models.data) > 0:
+                    os.environ['OPENAI_API_KEY'] = openai_key
+                    changes_made.append("OpenAI API key configured")
+                    
+                    # Update RAGFlow with new key if it exists
+                    if rag_flow:
+                        rag_flow.openai_client = test_client
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid OpenAI API key - no models returned")
+            except openai.AuthenticationError:
+                raise HTTPException(status_code=400, detail="Invalid OpenAI API key")
+            except openai.RateLimitError:
+                raise HTTPException(status_code=400, detail="OpenAI rate limit exceeded - check your usage limits")
+            except openai.APIConnectionError:
+                raise HTTPException(status_code=400, detail="Cannot connect to OpenAI - check your internet connection")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"OpenAI API key validation failed: {str(e)}")
+        
+        # Setup Google credentials
+        if google_creds_path and os.path.exists(google_creds_path):
+            try:
+                from utils import get_google_credentials_path
+                dest_path = get_google_credentials_path()
+                
+                # Ensure destination directory exists
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Copy credentials file
+                shutil.copy2(google_creds_path, dest_path)
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(dest_path)
+                changes_made.append("Google credentials configured")
+                
+                # Try to initialize Google services if RAGFlow exists
+                if rag_flow:
+                    try:
+                        rag_flow.auth_manager = GoogleAuthManager()
+                        if rag_flow.auth_manager.load_credentials():
+                            from local_rag_app import GoogleVisionOCR
+                            rag_flow.vision_ocr = GoogleVisionOCR(rag_flow.auth_manager.credentials)
+                            changes_made.append("Google OCR services initialized")
+                    except Exception as google_error:
+                        print(f"[WARNING] Google services setup failed: {google_error}")
+                        # Don't fail the whole setup for Google issues
+                        
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to setup Google credentials: {str(e)}")
+        
+        # Reinitialize RAGFlow if we have new credentials and it wasn't initialized before
+        if not rag_flow and openai_key:
+            try:
+                rag_flow = LocalRAGFlow(chat_model="gpt-4o-mini", use_electron_collection=True)
+                changes_made.append("RAGFlow system initialized")
+            except Exception as e:
+                print(f"[WARNING] RAGFlow initialization failed: {e}")
+                # Don't fail setup for this
+        
+        return {
+            "success": True, 
+            "message": f"Configuration updated: {', '.join(changes_made) if changes_made else 'No changes made'}",
+            "changes": changes_made
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (validation errors)
+        raise
+    except Exception as e:
+        print(f"[ERROR] Configuration setup failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Configuration setup failed: {str(e)}")
+
+@app.get("/api/config/check-setup")
+async def check_setup_status():
+    """Check if initial setup is needed"""
+    openai_configured = bool(os.getenv("OPENAI_API_KEY"))
+    
+    from utils import get_google_credentials_path
+    google_creds_exist = os.path.exists(get_google_credentials_path())
+    
+    return {
+        "setup_needed": not (openai_configured),  # Require at least OpenAI
+        "openai_configured": openai_configured,
+        "google_configured": google_creds_exist,
+        "ragflow_ready": rag_flow is not None
+    }
+
 @app.get("/api/documents")
 async def get_documents():
     """Get list of documents"""
