@@ -1,4 +1,4 @@
-name: Build Electron App Distribution
+name: Build Electron App Distribution (BACKUP - Complex Version)
 
 on:
   push:

@@ -1,0 +1,237 @@
+name: Build Electron App Distribution
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Manual build version (e.g., v1.5.0)'
+        required: false
+        default: 'manual'
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} Electron App
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact-name: Contract-Intelligence-Windows-Electron
+            installer-ext: exe
+          - os: macos-latest
+            platform: mac
+            artifact-name: Contract-Intelligence-macOS-Electron
+            installer-ext: dmg
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: electron-app/package-lock.json
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Node.js dependencies
+        working-directory: electron-app
+        run: npm ci
+
+      - name: Install Python dependencies
+        working-directory: electron-app/python-backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare Python backend for packaging
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Preparing Python backend for distribution..."
+          
+          # Create a simple python distribution structure
+          mkdir -p python-dist
+          cp -r python-backend python-dist/
+          
+          # Create a requirements file with exact versions for reproducibility
+          cd python-backend
+          pip freeze > ../python-dist/requirements-frozen.txt
+          
+          echo "Python backend prepared successfully"
+
+      - name: Update package.json version
+        working-directory: electron-app
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+            # Remove 'v' prefix if present
+            VERSION_CLEAN=${VERSION#v}
+            echo "Setting version to: $VERSION_CLEAN"
+            npm version "$VERSION_CLEAN" --no-git-tag-version
+          else
+            echo "Not a tag build, keeping current version"
+          fi
+
+      - name: Verify build prerequisites
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Verifying build prerequisites..."
+          
+          # Check required files exist
+          [ -f "main.js" ] || { echo "ERROR: main.js not found"; exit 1; }
+          [ -f "package.json" ] || { echo "ERROR: package.json not found"; exit 1; }
+          [ -d "src" ] || { echo "ERROR: src directory not found"; exit 1; }
+          [ -d "python-backend" ] || { echo "ERROR: python-backend directory not found"; exit 1; }
+          
+          # Check platform-specific icons
+          if [ "${{ matrix.platform }}" = "win" ]; then
+            [ -f "build/icon.ico" ] || { echo "ERROR: build/icon.ico required for Windows"; exit 1; }
+          elif [ "${{ matrix.platform }}" = "mac" ]; then
+            [ -f "build/icon.icns" ] || { echo "ERROR: build/icon.icns required for macOS"; exit 1; }
+          fi
+          
+          echo "All prerequisites verified successfully"
+
+      - name: Build Electron app
+        working-directory: electron-app
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "win" ]; then
+            npm run build-win
+          elif [ "${{ matrix.platform }}" = "mac" ]; then
+            npm run build-mac
+          else
+            npm run build
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify build output
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Build completed. Verifying output..."
+          
+          if [ ! -d "dist" ]; then
+            echo "ERROR: No dist directory found"
+            exit 1
+          fi
+          
+          echo "Contents of dist directory:"
+          ls -la dist/
+          
+          # Check for expected installer files
+          INSTALLER_COUNT=$(find dist/ -name "*.${{ matrix.installer-ext }}" | wc -l)
+          if [ "$INSTALLER_COUNT" -eq 0 ]; then
+            echo "ERROR: No ${{ matrix.installer-ext }} files found in dist/"
+            exit 1
+          fi
+          
+          echo "Build verification successful: Found $INSTALLER_COUNT installer file(s)"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: electron-app/dist/*.${{ matrix.installer-ext }}
+          retention-days: 90
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Contract-Intelligence-Windows-Electron
+          path: artifacts/
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Contract-Intelligence-macOS-Electron
+          path: artifacts/
+
+      - name: Get tag name
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          # Contract Intelligence Platform ${{ steps.tag.outputs.tag }} - Electron Edition
+          
+          ## 🚀 Modern Desktop Application
+          
+          This release features the **Electron-based desktop application** with enhanced features and cross-platform compatibility.
+          
+          ### ✨ Key Features:
+          - **Smart Contract Analysis**: Advanced AI-powered contract intelligence
+          - **RTL Language Support**: Full Hebrew/Arabic text support with proper formatting
+          - **Persistent Data Storage**: Documents remain available across app restarts
+          - **Modern UI**: Clean, responsive interface with real-time notifications
+          - **Enhanced OCR**: Improved Google Vision API integration
+          - **Cross-Platform**: Native Windows and macOS applications
+          
+          ### 📦 Installation:
+          
+          **Windows:**
+          1. Download `Contract Intelligence Platform Setup *.exe`
+          2. Run the installer and follow the setup wizard
+          3. Launch from Start Menu or Desktop shortcut
+          
+          **macOS:**
+          1. Download `Contract Intelligence Platform-*.dmg`
+          2. Open the DMG and drag the app to Applications folder
+          3. **IMPORTANT**: Right-click the app → "Open" to bypass security warning
+          4. Click "Open" when prompted about unidentified developer
+          
+          ### 🔧 Requirements:
+          - **OpenAI API Key** (required for AI analysis)
+          - **Google Cloud Vision credentials** (JSON file for OCR functionality)
+          - Windows 10+ or macOS 10.14+
+          
+          ### 📄 Notes:
+          - The Electron app uses a separate database for data isolation
+          - Your existing data remains untouched in other versions
+          - First-time setup will guide you through API configuration
+          
+          ---
+          **Build Date:** $(date -u)  
+          **Commit:** ${GITHUB_SHA:0:7}  
+          **Architecture:** Electron + Python FastAPI Backend
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Contract Intelligence ${{ steps.tag.outputs.tag }} - Electron
+          body_path: release_notes.md
+          files: |
+            artifacts/*.exe
+            artifacts/*.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

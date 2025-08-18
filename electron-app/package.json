@@ -39,23 +39,11 @@
       }
     ],
     "win": {
-      "target": "nsis",
-      "extraResources": [
-        {
-          "from": "python-portable",
-          "to": "python-portable"
-        }
-      ]
+      "target": "nsis"
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.productivity",
-      "extraResources": [
-        {
-          "from": "python-portable",
-          "to": "python-portable"
-        }
-      ]
+      "category": "public.app-category.productivity"
     },
     "nsis": {
       "oneClick": false,

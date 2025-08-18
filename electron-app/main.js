@@ -58,15 +58,15 @@ function startPythonBackend() {
         let backendPath;
         let workingDir;
         
-                    if (isDev) {
-                // Development: use minimal backend for testing
-                backendPath = path.join(__dirname, 'python-backend', 'api_server_minimal.py');
-                workingDir = path.join(__dirname, 'python-backend');
-            } else {
-                // Distribution: use minimal backend from resources
-                backendPath = path.join(process.resourcesPath, 'python-backend', 'api_server_minimal.py');
-                workingDir = path.join(process.resourcesPath, 'python-backend');
-            }
+        if (isDev) {
+            // Development: use minimal backend for testing
+            backendPath = path.join(__dirname, 'python-backend', 'api_server_minimal.py');
+            workingDir = path.join(__dirname, 'python-backend');
+        } else {
+            // Distribution: use minimal backend from resources
+            backendPath = path.join(process.resourcesPath, 'python-backend', 'api_server_minimal.py');
+            workingDir = path.join(process.resourcesPath, 'python-backend');
+        }
         
         console.log(`Starting Python backend from: ${backendPath}`);
         console.log(`Working directory: ${workingDir}`);
@@ -77,41 +77,15 @@ function startPythonBackend() {
             // Development: use system Python
             pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
         } else {
-            // Production: use bundled portable Python
-            if (process.platform === 'win32') {
-                pythonCmd = path.join(process.resourcesPath, 'python-portable', 'python.exe');
-            } else {
-                // macOS: use bundled portable Python
-                pythonCmd = path.join(process.resourcesPath, 'python-portable', 'bin', 'python3');
-            }
+            // Production: use system Python (user must have Python installed)
+            pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
         }
         
         // Start Python process
         let pythonEnv = { ...process.env };
         
-        if (!isDev) {
-            // Production: set up environment for portable Python
-            const portablePythonDir = path.join(process.resourcesPath, 'python-portable');
-            
-            if (process.platform === 'win32') {
-                // Windows: set up environment for portable Python
-                const sitePackagesDir = path.join(portablePythonDir, 'Lib', 'site-packages');
-                
-                pythonEnv.PYTHONHOME = portablePythonDir;
-                pythonEnv.PYTHONPATH = `${sitePackagesDir};${workingDir}`;
-                pythonEnv.PATH = `${portablePythonDir};${pythonEnv.PATH}`;
-            } else {
-                // macOS: set up environment for portable Python
-                const sitePackagesDir = path.join(portablePythonDir, 'lib', 'python3.12', 'site-packages');
-                
-                pythonEnv.PYTHONHOME = portablePythonDir;
-                pythonEnv.PYTHONPATH = `${sitePackagesDir}:${workingDir}`;
-                pythonEnv.PATH = `${path.join(portablePythonDir, 'bin')}:${pythonEnv.PATH}`;
-            }
-        } else {
-            // Development: ensure Python can find dependencies
-            pythonEnv.PYTHONPATH = workingDir;
-        }
+        // Ensure Python can find the backend dependencies
+        pythonEnv.PYTHONPATH = workingDir;
         
         pythonProcess = spawn(pythonCmd, [backendPath], {
             cwd: workingDir,
