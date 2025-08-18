@@ -60,19 +60,52 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
-      - name: Install Python dependencies for Windows
+      - name: Setup portable Python for Windows
         if: matrix.platform == 'win'
-        working-directory: electron-app/python-backend
+        shell: cmd
+        working-directory: electron-app
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          echo "Downloading Python embeddable..."
+          curl -L -o python-embed.zip "https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip"
+          
+          echo "Creating python-portable directory..."
+          mkdir python-portable
+          
+          echo "Extracting Python..."
+          tar -xf python-embed.zip -C python-portable
+          
+          echo "Configuring Python..."
+          cd python-portable
+          echo python312.zip> python312._pth
+          echo .>> python312._pth
+          echo import site>> python312._pth
+          
+          echo "Creating site-packages..."
+          mkdir Lib
+          mkdir Lib\site-packages
+          
+          echo "Installing pip..."
+          curl -L -o get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+          python.exe get-pip.py --no-warn-script-location
+          
+          echo "Installing dependencies..."
+          python.exe -m pip install --no-warn-script-location --target Lib\site-packages -r ..\python-backend\requirements.txt
 
-      - name: Install Python dependencies for macOS
+      - name: Setup portable Python for macOS  
         if: matrix.platform == 'mac'
-        working-directory: electron-app/python-backend
+        shell: bash
+        working-directory: electron-app
         run: |
-          python3 -m pip install --upgrade pip
-          pip3 install -r requirements.txt
+          echo "Creating python-portable with system Python copy..."
+          mkdir -p python-portable/bin
+          mkdir -p python-portable/lib/python3.12/site-packages
+          
+          # Copy system Python executable
+          cp $(which python3) python-portable/bin/python3
+          chmod +x python-portable/bin/python3
+          
+          # Install dependencies to local site-packages
+          python3 -m pip install --target python-portable/lib/python3.12/site-packages -r python-backend/requirements.txt
 
       - name: Verify backend preparation
         working-directory: electron-app
@@ -80,8 +113,16 @@ jobs:
           echo "Contents of python-backend directory:"
           ls -la python-backend/ || echo "python-backend directory not found"
           
-          echo "Python version:"
-          python --version || python3 --version
+          echo "Contents of python-portable directory:"
+          ls -la python-portable/ || echo "python-portable directory not found"
+          
+          if [ "${{ matrix.platform }}" == "win" ]; then
+            echo "Testing Windows portable Python:"
+            python-portable/python.exe --version || echo "Windows Python test failed"
+          else
+            echo "Testing macOS portable Python:"
+            python-portable/bin/python3 --version || echo "macOS Python test failed"
+          fi
         shell: bash
 
       - name: Update Electron app package.json version

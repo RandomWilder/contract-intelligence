@@ -77,16 +77,37 @@ function startPythonBackend() {
             // Development: use system Python
             pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
         } else {
-            // Production: use system Python (installed during build)
-            pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+            // Production: use bundled portable Python
+            if (process.platform === 'win32') {
+                pythonCmd = path.join(process.resourcesPath, 'python-portable', 'python.exe');
+            } else {
+                // macOS: use bundled portable Python
+                pythonCmd = path.join(process.resourcesPath, 'python-portable', 'bin', 'python3');
+            }
         }
         
         // Start Python process
         let pythonEnv = { ...process.env };
         
         if (!isDev) {
-            // Production: ensure Python can find dependencies
-            pythonEnv.PYTHONPATH = workingDir;
+            // Production: set up environment for portable Python
+            const portablePythonDir = path.join(process.resourcesPath, 'python-portable');
+            
+            if (process.platform === 'win32') {
+                // Windows: set up environment for portable Python
+                const sitePackagesDir = path.join(portablePythonDir, 'Lib', 'site-packages');
+                
+                pythonEnv.PYTHONHOME = portablePythonDir;
+                pythonEnv.PYTHONPATH = `${sitePackagesDir};${workingDir}`;
+                pythonEnv.PATH = `${portablePythonDir};${pythonEnv.PATH}`;
+            } else {
+                // macOS: set up environment for portable Python
+                const sitePackagesDir = path.join(portablePythonDir, 'lib', 'python3.12', 'site-packages');
+                
+                pythonEnv.PYTHONHOME = portablePythonDir;
+                pythonEnv.PYTHONPATH = `${sitePackagesDir}:${workingDir}`;
+                pythonEnv.PATH = `${path.join(portablePythonDir, 'bin')}:${pythonEnv.PATH}`;
+            }
         } else {
             // Development: ensure Python can find dependencies
             pythonEnv.PYTHONPATH = workingDir;
