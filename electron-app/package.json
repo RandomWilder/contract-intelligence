@@ -33,10 +33,7 @@
       "package.json"
     ],
     "extraResources": [
-      {
-        "from": "python-backend",
-        "to": "python-backend"
-      }
+      "dist/api_server*"
     ],
     "win": {
       "target": "nsis"

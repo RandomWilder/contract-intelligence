@@ -52,27 +52,119 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies and PyInstaller
         working-directory: electron-app/python-backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pyinstaller
 
-      - name: Prepare Python backend for packaging
+      - name: Build Python executable with PyInstaller
         working-directory: electron-app
         shell: bash
         run: |
-          echo "Preparing Python backend for distribution..."
+          echo "Building Python backend executable with PyInstaller..."
           
-          # Create a simple python distribution structure
-          mkdir -p python-dist
-          cp -r python-backend python-dist/
+          # Create PyInstaller spec file for better control
+          cat > api_server.spec << 'EOF'
+          # -*- mode: python ; coding: utf-8 -*-
+
+          block_cipher = None
+
+          a = Analysis(
+              ['python-backend/api_server_minimal.py'],
+              pathex=[],
+              binaries=[],
+              datas=[
+                  ('python-backend/requirements.txt', '.'),
+              ],
+              hiddenimports=[
+                  'uvicorn',
+                  'uvicorn.lifespan',
+                  'uvicorn.lifespan.on',
+                  'uvicorn.protocols',
+                  'uvicorn.protocols.websockets',
+                  'uvicorn.protocols.websockets.auto',
+                  'uvicorn.protocols.http',
+                  'uvicorn.protocols.http.auto',
+                  'uvicorn.protocols.http.h11_impl',
+                  'uvicorn.protocols.http.httptools_impl',
+                  'uvicorn.loops',
+                  'uvicorn.loops.auto',
+                  'fastapi',
+                  'fastapi.applications',
+                  'fastapi.routing',
+                  'fastapi.middleware',
+                  'fastapi.middleware.cors',
+                  'starlette',
+                  'starlette.applications',
+                  'starlette.routing',
+                  'starlette.middleware',
+                  'starlette.middleware.cors',
+                  'openai',
+                  'chromadb',
+                  'chromadb.config',
+                  'google.auth',
+                  'google_auth_oauthlib',
+                  'google.oauth2.credentials',
+                  'PIL',
+                  'PIL.Image',
+                  'PyPDF2',
+                  'docx',
+                  'pandas',
+                  'numpy',
+                  'tiktoken'
+              ],
+              hookspath=[],
+              hooksconfig={},
+              runtime_hooks=[],
+              excludes=[],
+              win_no_prefer_redirects=False,
+              win_private_assemblies=False,
+              cipher=block_cipher,
+              noarchive=False,
+          )
+
+          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+          exe = EXE(
+              pyz,
+              a.scripts,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              [],
+              name='api_server',
+              debug=False,
+              bootloader_ignore_signals=False,
+              strip=False,
+              upx=True,
+              upx_exclude=[],
+              runtime_tmpdir=None,
+              console=True,
+              disable_windowed_traceback=False,
+              argv_emulation=False,
+              target_arch=None,
+              codesign_identity=None,
+              entitlements_file=None,
+          )
+          EOF
           
-          # Create a requirements file with exact versions for reproducibility
-          cd python-backend
-          pip freeze > ../python-dist/requirements-frozen.txt
+          # Build the executable
+          pyinstaller api_server.spec --clean --noconfirm
           
-          echo "Python backend prepared successfully"
+          # Verify the executable was created
+          if [ "${{ matrix.platform }}" = "win" ]; then
+            [ -f "dist/api_server.exe" ] || { echo "ERROR: api_server.exe not created"; exit 1; }
+            echo "Windows executable created: dist/api_server.exe"
+            ls -la dist/api_server.exe
+          else
+            [ -f "dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
+            echo "macOS executable created: dist/api_server"
+            ls -la dist/api_server
+          fi
+          
+          echo "PyInstaller build completed successfully"
 
       - name: Update package.json version
         working-directory: electron-app

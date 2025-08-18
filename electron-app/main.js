@@ -59,39 +59,37 @@ function startPythonBackend() {
         let workingDir;
         
         if (isDev) {
-            // Development: use minimal backend for testing
+            // Development: use Python script directly
             backendPath = path.join(__dirname, 'python-backend', 'api_server_minimal.py');
             workingDir = path.join(__dirname, 'python-backend');
         } else {
-            // Distribution: use minimal backend from resources
-            backendPath = path.join(process.resourcesPath, 'python-backend', 'api_server_minimal.py');
-            workingDir = path.join(process.resourcesPath, 'python-backend');
+            // Distribution: use PyInstaller executable
+            const executableName = process.platform === 'win32' ? 'api_server.exe' : 'api_server';
+            backendPath = path.join(process.resourcesPath, executableName);
+            workingDir = process.resourcesPath;
         }
         
         console.log(`Starting Python backend from: ${backendPath}`);
         console.log(`Working directory: ${workingDir}`);
         
-        // Determine Python executable
-        let pythonCmd;
-        if (isDev) {
-            // Development: use system Python
-            pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-        } else {
-            // Production: use system Python (user must have Python installed)
-            pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-        }
-        
-        // Start Python process
-        let pythonEnv = { ...process.env };
-        
-        // Ensure Python can find the backend dependencies
-        pythonEnv.PYTHONPATH = workingDir;
-        
-        pythonProcess = spawn(pythonCmd, [backendPath], {
+        // Start backend process
+        let spawnOptions = {
             cwd: workingDir,
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env: pythonEnv
-        });
+            stdio: ['pipe', 'pipe', 'pipe']
+        };
+        
+        if (isDev) {
+            // Development: use Python interpreter
+            const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+            let pythonEnv = { ...process.env };
+            pythonEnv.PYTHONPATH = workingDir;
+            spawnOptions.env = pythonEnv;
+            
+            pythonProcess = spawn(pythonCmd, [backendPath], spawnOptions);
+        } else {
+            // Production: run PyInstaller executable directly
+            pythonProcess = spawn(backendPath, [], spawnOptions);
+        }
 
         pythonProcess.stdout.on('data', (data) => {
             console.log(`Python Backend: ${data}`);
