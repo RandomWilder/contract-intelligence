@@ -6,6 +6,8 @@ env/
 
 # Build and Distribution Directories (CRITICAL - DO NOT COMMIT)
 build/
+# Allow electron-app build directory (contains essential icons)
+!electron-app/build/
 dist/
 *.egg-info/
 
