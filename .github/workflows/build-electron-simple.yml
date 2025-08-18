@@ -212,16 +212,32 @@ jobs:
           
           echo "All prerequisites verified successfully"
 
+      - name: Verify PyInstaller files before electron-builder
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Verifying PyInstaller files exist before electron-builder..."
+          ls -la pyinstaller-dist/ || { echo "ERROR: pyinstaller-dist directory not found"; exit 1; }
+          
+          if [ "${{ matrix.platform }}" = "win" ]; then
+            [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not found for electron-builder"; exit 1; }
+            echo "✅ Windows executable found: pyinstaller-dist/api_server.exe"
+          else
+            [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server not found for electron-builder"; exit 1; }
+            echo "✅ macOS executable found: pyinstaller-dist/api_server"
+          fi
+
       - name: Build Electron app
         working-directory: electron-app
         shell: bash
         run: |
+          echo "Starting electron-builder with verbose logging..."
           if [ "${{ matrix.platform }}" = "win" ]; then
-            npm run build-win
+            DEBUG=electron-builder npm run build-win
           elif [ "${{ matrix.platform }}" = "mac" ]; then
-            npm run build-mac
+            DEBUG=electron-builder npm run build-mac
           else
-            npm run build
+            DEBUG=electron-builder npm run build
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
