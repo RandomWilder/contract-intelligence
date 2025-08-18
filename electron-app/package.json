@@ -1,6 +1,6 @@
 {
   "name": "contract-intelligence-desktop",
-  "version": "1.5.10",
+  "version": "1.5.11",
   "description": "Contract Intelligence Platform - Desktop App",
   "main": "main.js",
   "scripts": {
@@ -33,7 +33,7 @@
       "package.json"
     ],
     "extraResources": [
-      "dist/api_server*"
+      "pyinstaller-dist/api_server*"
     ],
     "win": {
       "target": "nsis",

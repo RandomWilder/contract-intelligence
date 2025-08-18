@@ -150,18 +150,18 @@ jobs:
           )
           EOF
           
-          # Build the executable
-          pyinstaller api_server.spec --clean --noconfirm
+          # Build the executable with custom output directory
+          pyinstaller api_server.spec --clean --noconfirm --distpath pyinstaller-dist
           
           # Verify the executable was created
           if [ "${{ matrix.platform }}" = "win" ]; then
-            [ -f "dist/api_server.exe" ] || { echo "ERROR: api_server.exe not created"; exit 1; }
-            echo "Windows executable created: dist/api_server.exe"
-            ls -la dist/api_server.exe
+            [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not created"; exit 1; }
+            echo "Windows executable created: pyinstaller-dist/api_server.exe"
+            ls -la pyinstaller-dist/api_server.exe
           else
-            [ -f "dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
-            echo "macOS executable created: dist/api_server"
-            ls -la dist/api_server
+            [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
+            echo "macOS executable created: pyinstaller-dist/api_server"
+            ls -la pyinstaller-dist/api_server
           fi
           
           echo "PyInstaller build completed successfully"
