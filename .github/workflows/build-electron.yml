@@ -60,70 +60,19 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
-      - name: Prepare portable Python for Windows
+      - name: Install Python dependencies for Windows
         if: matrix.platform == 'win'
-        shell: powershell
-        working-directory: electron-app
+        working-directory: electron-app/python-backend
         run: |
-          # Download Python 3.12 embeddable package for Windows
-          Write-Host "Downloading Python embeddable package..."
-          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip" -OutFile "python-embed.zip"
-          
-          # Extract to python-portable directory
-          Write-Host "Extracting Python..."
-          New-Item -ItemType Directory -Force -Path "python-portable"
-          Expand-Archive -Path "python-embed.zip" -DestinationPath "python-portable" -Force
-          
-          # Enable site-packages by uncommenting import site in python312._pth
-          Write-Host "Enabling site-packages..."
-          $pthFile = "python-portable\python312._pth"
-          $content = Get-Content $pthFile
-          $content = $content -replace '^#import site', 'import site'
-          Set-Content -Path $pthFile -Value $content
-          
-          # Create Lib/site-packages directory
-          New-Item -ItemType Directory -Force -Path "python-portable\Lib\site-packages"
-          
-          # Download and install pip
-          Write-Host "Installing pip..."
-          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "python-portable\get-pip.py"
-          Set-Location "python-portable"
-          .\python.exe get-pip.py --target Lib\site-packages
-          
-          # Install required packages
-          Write-Host "Installing dependencies..."
-          .\python.exe -m pip install setuptools wheel --target Lib\site-packages
-          .\python.exe -m pip install -r ..\python-backend\requirements.txt --target Lib\site-packages
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Prepare portable Python for macOS
+      - name: Install Python dependencies for macOS
         if: matrix.platform == 'mac'
-        shell: bash
-        working-directory: electron-app
+        working-directory: electron-app/python-backend
         run: |
-          # Download Python 3.12 for macOS (using python.org installer)
-          curl -L -o python-installer.pkg https://www.python.org/ftp/python/3.12.5/python-3.12.5-macos11.pkg
-          
-          # Create a temporary directory to extract Python
-          mkdir -p temp-python
-          cd temp-python
-          
-          # Extract the installer
-          xar -xf ../python-installer.pkg
-          
-          # Extract the Python framework
-          cd Python_Framework.pkg
-          cat Payload | gunzip -dc | cpio -i
-          
-          # Copy Python framework to python-portable
-          cd ..
-          mkdir -p ../python-portable
-          cp -R Library/Frameworks/Python.framework/Versions/3.12/* ../python-portable/
-          
-          # Install pip and dependencies
-          cd ../python-portable
-          ./bin/python3 -m ensurepip
-          ./bin/python3 -m pip install --upgrade pip
-          ./bin/python3 -m pip install -r ../python-backend/requirements.txt
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
 
       - name: Verify backend preparation
         working-directory: electron-app
@@ -131,10 +80,8 @@ jobs:
           echo "Contents of python-backend directory:"
           ls -la python-backend/ || echo "python-backend directory not found"
           
-          if [ "${{ matrix.platform }}" == "win" ]; then
-            echo "Contents of python-portable directory:"
-            ls -la python-portable/ || echo "python-portable directory not found"
-          fi
+          echo "Python version:"
+          python --version || python3 --version
         shell: bash
 
       - name: Update Electron app package.json version
