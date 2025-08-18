@@ -1,14 +1,16 @@
 name: Build Electron App Distribution (BACKUP - Complex Version)
 
-on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Manual build version (e.g., v1.5.0)'
-        required: false
-        default: 'manual'
+# DISABLED - Backup workflow preserved for reference only
+# To re-enable, uncomment the 'on:' section below
+# on:
+#   push:
+#     tags: ['v*']
+#   workflow_dispatch:
+#     inputs:
+#       version:
+#         description: 'Manual build version (e.g., v1.5.0)'
+#         required: false
+#         default: 'manual'
 
 env:
   PYTHON_VERSION: '3.12'

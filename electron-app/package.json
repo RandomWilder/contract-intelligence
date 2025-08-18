@@ -1,6 +1,6 @@
 {
   "name": "contract-intelligence-desktop",
-  "version": "1.5.11",
+  "version": "1.5.12",
   "description": "Contract Intelligence Platform - Desktop App",
   "main": "main.js",
   "scripts": {
@@ -14,6 +14,10 @@
   "keywords": ["contract", "ai", "desktop"],
   "author": "Contract Intelligence Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RandomWilder/contract-intelligence.git"
+  },
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1"
