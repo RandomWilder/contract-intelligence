@@ -15,6 +15,11 @@
                 <p>Analyze. Recommend. Act.</p>
             </div>
             
+            <!-- Settings Button -->
+            <div class="header-actions">
+                <button class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
+            </div>
+            
             <!-- Status Bar -->
             <div class="status-bar">
                 <div class="status-item" id="backend-status">
@@ -193,6 +198,65 @@
             <p>Starting backend services...</p>
         </div>
     </div>
+
+    <!-- Setup Modal - Initially hidden, shown by app.js when needed -->
+    <div id="setup-modal" class="setup-modal" style="display: none;">
+        <div class="setup-modal-content">
+            <div class="setup-header">
+                <h2>📄 Welcome to Contract Intelligence</h2>
+                <p>Let's get you set up with the essentials</p>
+            </div>
+            
+            <div class="setup-form">
+                <div class="setup-step">
+                    <h3>🔑 OpenAI API Key</h3>
+                    <p class="step-description">Required for AI-powered contract analysis</p>
+                    <div class="input-group">
+                        <input type="password" id="setup-openai-key" placeholder="sk-..." autocomplete="off" />
+                        <button type="button" class="toggle-password-btn" onclick="this.previousElementSibling.type = this.previousElementSibling.type === 'password' ? 'text' : 'password'; this.textContent = this.textContent === '👁️' ? '🙈' : '👁️'">👁️</button>
+                    </div>
+                    <div class="setup-help">
+                        <small>Get your API key from <a href="#" onclick="window.electronAPI?.openExternal && window.electronAPI.openExternal('https://platform.openai.com/api-keys')">OpenAI Platform</a></small>
+                    </div>
+                </div>
+                
+                <div class="setup-step">
+                    <h3>🔍 Google Cloud Credentials (Optional)</h3>
+                    <p class="step-description">For OCR capabilities with scanned documents</p>
+                    <div class="input-group">
+                        <input type="text" id="setup-google-path" placeholder="Select credentials JSON file..." readonly />
+                        <button type="button" class="browse-btn" onclick="app.selectCredentialsForSetup()">Browse</button>
+                    </div>
+                    <div class="setup-help">
+                        <small>
+                            <a href="#" onclick="window.electronAPI?.openExternal && window.electronAPI.openExternal('https://console.cloud.google.com/apis/credentials')">Create credentials</a> 
+                            in Google Cloud Console (OAuth 2.0 Client ID, Desktop Application)
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="setup-actions">
+                    <button id="setup-save-btn" class="btn btn-primary" onclick="app.saveSetupConfig()">
+                        💾 Save & Continue
+                    </button>
+                    <button class="btn btn-secondary" onclick="app.skipSetup()">
+                        ⏭️ Skip Google Setup
+                    </button>
+                </div>
+                
+                <div id="setup-status" class="setup-status" style="display: none;"></div>
+            </div>
+            
+            <div class="setup-footer">
+                <small class="setup-note">
+                    🔒 Your credentials are stored securely on your local machine and never shared.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container for Toast Messages -->
+    <div id="notification-container" class="notification-container"></div>
 
     <script src="app.js"></script>
 </body>

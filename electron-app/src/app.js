@@ -8,6 +8,7 @@ class ContractIntelligenceApp {
         this.documents = [];
         this.documentsByFolder = {};
         this.contextMenuTarget = null;
+        this.setupNeeded = false;
         
         this.init();
     }
@@ -27,11 +28,329 @@ class ContractIntelligenceApp {
             console.log('Backend ready:', isReady);
             this.isBackendReady = isReady;
             this.hideLoadingOverlay();
-            this.loadInitialData();
+            this.checkAndHandleSetup();
         });
         
         // Show loading overlay initially
         this.showLoadingOverlay('Starting backend services...');
+    }
+
+    async checkAndHandleSetup() {
+        try {
+            // Check if setup is needed
+            const response = await fetch(`${this.backendUrl}/api/config/check-setup`);
+            const setupStatus = await response.json();
+            
+            if (setupStatus.setup_needed) {
+                this.setupNeeded = true;
+                this.showSetupModal();
+            } else {
+                this.setupNeeded = false;
+                this.loadInitialData();
+            }
+            
+        } catch (error) {
+            console.error('Failed to check setup status:', error);
+            // If we can't check setup, try to load normally
+            this.loadInitialData();
+        }
+    }
+
+    showSetupModal() {
+        // Create setup modal HTML
+        const modalHTML = `
+            <div id="setup-modal" class="setup-modal">
+                <div class="setup-modal-content">
+                    <div class="setup-header">
+                        <h2>📄 Welcome to Contract Intelligence</h2>
+                        <p>Let's get you set up with the essentials</p>
+                    </div>
+                    
+                    <div class="setup-form">
+                        <div class="setup-step">
+                            <h3>🔑 OpenAI API Key</h3>
+                            <p class="step-description">Required for AI-powered contract analysis</p>
+                            <div class="input-group">
+                                <input type="password" id="setup-openai-key" placeholder="sk-..." />
+                                <button type="button" id="show-key-btn" onclick="this.previousElementSibling.type = this.previousElementSibling.type === 'password' ? 'text' : 'password'">👁️</button>
+                            </div>
+                            <div class="setup-help">
+                                <small>Get your API key from <a href="#" onclick="window.electronAPI.openExternal && window.electronAPI.openExternal('https://platform.openai.com/api-keys')">OpenAI Platform</a></small>
+                            </div>
+                        </div>
+                        
+                        <div class="setup-step">
+                            <h3>🔍 Google Cloud Credentials (Optional)</h3>
+                            <p class="step-description">For OCR capabilities with scanned documents</p>
+                            <div class="input-group">
+                                <input type="text" id="setup-google-path" placeholder="Select credentials JSON file..." readonly />
+                                <button type="button" onclick="app.selectCredentialsForSetup()">Browse</button>
+                            </div>
+                            <div class="setup-help">
+                                <small>
+                                    <a href="#" onclick="window.electronAPI.openExternal && window.electronAPI.openExternal('https://console.cloud.google.com/apis/credentials')">Create credentials</a> 
+                                    in Google Cloud Console (OAuth 2.0 Client ID, Desktop Application)
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="setup-actions">
+                            <button id="setup-save-btn" class="btn btn-primary" onclick="app.saveSetupConfig()">
+                                💾 Save & Continue
+                            </button>
+                            <button class="btn btn-secondary" onclick="app.skipSetup()">
+                                ⏭️ Skip Google Setup
+                            </button>
+                        </div>
+                        
+                        <div id="setup-status" class="setup-status"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Add modal styles
+        this.addSetupModalStyles();
+    }
+
+    addSetupModalStyles() {
+        if (document.getElementById('setup-modal-styles')) return;
+        
+        const styles = `
+            <style id="setup-modal-styles">
+                .setup-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.8);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10000;
+                }
+                
+                .setup-modal-content {
+                    background: white;
+                    border-radius: 12px;
+                    padding: 2rem;
+                    max-width: 500px;
+                    width: 90%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+                }
+                
+                .setup-header {
+                    text-align: center;
+                    margin-bottom: 2rem;
+                }
+                
+                .setup-header h2 {
+                    margin: 0 0 0.5rem 0;
+                    color: #333;
+                }
+                
+                .setup-header p {
+                    margin: 0;
+                    color: #666;
+                }
+                
+                .setup-step {
+                    margin-bottom: 2rem;
+                }
+                
+                .setup-step h3 {
+                    margin: 0 0 0.5rem 0;
+                    color: #333;
+                    font-size: 1.1rem;
+                }
+                
+                .step-description {
+                    margin: 0 0 1rem 0;
+                    color: #666;
+                    font-size: 0.9rem;
+                }
+                
+                .input-group {
+                    display: flex;
+                    gap: 0.5rem;
+                }
+                
+                .input-group input {
+                    flex: 1;
+                    padding: 0.75rem;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    font-size: 0.9rem;
+                }
+                
+                .input-group button {
+                    padding: 0.75rem 1rem;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    background: #f8f9fa;
+                    cursor: pointer;
+                }
+                
+                .input-group button:hover {
+                    background: #e9ecef;
+                }
+                
+                .setup-help {
+                    margin-top: 0.5rem;
+                }
+                
+                .setup-help small {
+                    color: #888;
+                }
+                
+                .setup-help a {
+                    color: #007bff;
+                    text-decoration: none;
+                }
+                
+                .setup-help a:hover {
+                    text-decoration: underline;
+                }
+                
+                .setup-actions {
+                    display: flex;
+                    gap: 1rem;
+                    justify-content: center;
+                    margin-top: 2rem;
+                }
+                
+                .setup-status {
+                    margin-top: 1rem;
+                    padding: 0.75rem;
+                    border-radius: 6px;
+                    display: none;
+                }
+                
+                .setup-status.success {
+                    background: #d4edda;
+                    color: #155724;
+                    border: 1px solid #c3e6cb;
+                }
+                
+                .setup-status.error {
+                    background: #f8d7da;
+                    color: #721c24;
+                    border: 1px solid #f5c6cb;
+                }
+                
+                .setup-status.loading {
+                    background: #d1ecf1;
+                    color: #0c5460;
+                    border: 1px solid #bee5eb;
+                }
+            </style>
+        `;
+        
+        document.head.insertAdjacentHTML('beforeend', styles);
+    }
+
+    async selectCredentialsForSetup() {
+        try {
+            const result = await window.electronAPI.showOpenDialog({
+                title: 'Select Google Credentials File',
+                filters: [
+                    { name: 'JSON Files', extensions: ['json'] },
+                    { name: 'All Files', extensions: ['*'] }
+                ],
+                properties: ['openFile']
+            });
+
+            if (!result.canceled && result.filePaths.length > 0) {
+                document.getElementById('setup-google-path').value = result.filePaths[0];
+            }
+        } catch (error) {
+            console.error('File selection failed:', error);
+            this.showSetupStatus('error', 'Failed to select file: ' + error.message);
+        }
+    }
+
+    async saveSetupConfig() {
+        const openaiKey = document.getElementById('setup-openai-key').value.trim();
+        const googlePath = document.getElementById('setup-google-path').value.trim();
+        
+        if (!openaiKey) {
+            this.showSetupStatus('error', 'OpenAI API key is required');
+            return;
+        }
+        
+        this.showSetupStatus('loading', 'Validating configuration...');
+        
+        try {
+            const setupData = {
+                openai_key: openaiKey,
+                google_creds_path: googlePath || undefined
+            };
+            
+            const response = await fetch(`${this.backendUrl}/api/config/setup`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(setupData)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showSetupStatus('success', 'Configuration saved successfully!');
+                
+                // Wait a moment then close modal and continue
+                setTimeout(() => {
+                    this.closeSetupModal();
+                    this.setupNeeded = false;
+                    this.loadInitialData();
+                }, 1500);
+                
+            } else {
+                this.showSetupStatus('error', result.message || 'Setup failed');
+            }
+            
+        } catch (error) {
+            console.error('Setup failed:', error);
+            this.showSetupStatus('error', 'Setup failed: ' + error.message);
+        }
+    }
+
+    skipSetup() {
+        const openaiKey = document.getElementById('setup-openai-key').value.trim();
+        
+        if (!openaiKey) {
+            this.showSetupStatus('error', 'OpenAI API key is required to continue');
+            return;
+        }
+        
+        // Save just the OpenAI key
+        this.saveSetupConfig();
+    }
+
+    showSetupStatus(type, message) {
+        const statusDiv = document.getElementById('setup-status');
+        statusDiv.className = `setup-status ${type}`;
+        statusDiv.textContent = message;
+        statusDiv.style.display = 'block';
+    }
+
+    closeSetupModal() {
+        const modal = document.getElementById('setup-modal');
+        if (modal) {
+            modal.remove();
+        }
+        
+        const styles = document.getElementById('setup-modal-styles');
+        if (styles) {
+            styles.remove();
+        }
     }
 
     setupEventListeners() {
@@ -156,7 +475,7 @@ class ContractIntelligenceApp {
                         <li>Save as: <code>google_credentials.json</code></li>
                     </ol>
                 </div>
-                <button class="btn btn-primary" onclick="app.selectCredentialsFile()">📁 Select Credentials File</button>
+                <button class="btn btn-primary" onclick="app.selectCredentialsFile()">🔍 Select Credentials File</button>
             `;
         } else {
             section.innerHTML = `
@@ -584,7 +903,7 @@ class ContractIntelligenceApp {
                 
                 // Copy file to the expected location
                 this.showProgress('Setting up Google credentials...');
-                
+
                 const copyResponse = await fetch(`${this.backendUrl}/api/google/setup-credentials`, {
                     method: 'POST',
                     headers: {
@@ -611,7 +930,7 @@ class ContractIntelligenceApp {
             this.hideProgress();
         }
     }
-
+ 
     async clearGoogleCredentials() {
         if (!confirm('Clear Google credentials?')) return;
         
@@ -634,18 +953,18 @@ class ContractIntelligenceApp {
             this.showError('Failed to clear credentials: ' + error.message);
         }
     }
-
+ 
     // UI helpers
     showLoadingOverlay(message = 'Loading...') {
         const overlay = document.getElementById('loading-overlay');
         overlay.style.display = 'flex';
         overlay.querySelector('p').textContent = message;
     }
-
+ 
     hideLoadingOverlay() {
         document.getElementById('loading-overlay').style.display = 'none';
     }
-
+ 
     showProgress(message) {
         const container = document.querySelector('.progress-container');
         const text = container.querySelector('.progress-text');
@@ -657,7 +976,7 @@ class ContractIntelligenceApp {
         const fill = container.querySelector('.progress-fill');
         fill.style.width = '70%';
     }
-
+ 
     hideProgress() {
         const container = document.querySelector('.progress-container');
         container.style.display = 'none';
@@ -665,15 +984,15 @@ class ContractIntelligenceApp {
         const fill = container.querySelector('.progress-fill');
         fill.style.width = '0%';
     }
-
+ 
     showSuccess(message) {
         this.showNotification(message, 'success');
     }
-
+ 
     showError(message) {
         this.showNotification(message, 'error');
     }
-
+ 
     showNotification(message, type = 'info') {
         // Create a custom notification that supports RTL text
         const isRTL = this.detectRTL(message);
@@ -703,7 +1022,7 @@ class ContractIntelligenceApp {
             }
         }, 5000);
     }
-
+ 
     // Context Menu functionality
     showContextMenu(event, type, name, folder = null) {
         event.preventDefault();
@@ -738,13 +1057,13 @@ class ContractIntelligenceApp {
         
         console.log(`Context menu shown for ${type}: ${name}${folder ? ` in ${folder}` : ''}`);
     }
-
+ 
     hideContextMenu() {
         const contextMenu = document.getElementById('context-menu');
         contextMenu.style.display = 'none';
         this.contextMenuTarget = null;
     }
-
+ 
     handleContextMenuAction(action) {
         if (!this.contextMenuTarget) return;
         
@@ -766,7 +1085,7 @@ class ContractIntelligenceApp {
                 break;
         }
     }
-
+ 
     openItem(type, name, folder) {
         if (type === 'document') {
             this.showNotification(`Opening ${name}...`, 'info');
@@ -776,7 +1095,7 @@ class ContractIntelligenceApp {
             this.toggleFolder(folderId);
         }
     }
-
+ 
     renameItem(type, name, folder) {
         const newName = prompt(`Enter new name for ${type}:`, name);
         if (newName && newName.trim() && newName.trim() !== name) {
@@ -784,7 +1103,7 @@ class ContractIntelligenceApp {
             // TODO: Implement rename functionality
         }
     }
-
+ 
     async deleteItemWithConfirmation(type, name, folder) {
         let confirmMessage;
         if (type === 'folder') {
@@ -806,7 +1125,7 @@ class ContractIntelligenceApp {
             }
         }
     }
-
+ 
     async deleteFolder(folderName) {
         try {
             this.showProgress(`Deleting folder "${folderName}"...`);
@@ -832,7 +1151,7 @@ class ContractIntelligenceApp {
             this.hideProgress();
         }
     }
-
+ 
     showItemProperties(type, name, folder) {
         let info = `${type.charAt(0).toUpperCase() + type.slice(1)}: ${name}`;
         if (folder && type === 'document') {
@@ -847,10 +1166,10 @@ class ContractIntelligenceApp {
         alert(info);
         // TODO: Implement proper properties dialog
     }
-}
-
-// Global functions for onclick handlers
-function createNewFolder() {
+ }
+ 
+ // Global functions for onclick handlers
+ function createNewFolder() {
     const name = prompt('Enter folder name:');
     if (name && name.trim()) {
         const select = document.getElementById('folder-select');
@@ -860,26 +1179,31 @@ function createNewFolder() {
         select.appendChild(option);
         select.value = name.trim();
     }
-}
-
-function uploadFile() {
+ }
+ 
+ function uploadFile() {
     app.uploadFile();
-}
-
-function cancelUpload() {
+ }
+ 
+ function cancelUpload() {
     app.cancelUpload();
-}
-
-function sendMessage() {
+ }
+ 
+ function sendMessage() {
     app.sendMessage();
-}
-
-function askQuickQuestion(question) {
+ }
+ 
+ function askQuickQuestion(question) {
     app.askQuickQuestion(question);
-}
-
-function authenticateGoogle() {
+ }
+ 
+ function authenticateGoogle() {
     app.authenticateGoogle();
+ }
+ 
+ // Open settings page
+function openSettings() {
+    window.location.href = 'settings.html';
 }
 
 // Initialize app when DOM is loaded

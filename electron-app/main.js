@@ -52,13 +52,71 @@ function createWindow() {
 
 function startPythonBackend() {
     try {
-        // Path to Python backend (we'll create this)
-        const backendPath = path.join(__dirname, '..', 'backend', 'api_server.py');
+        // **FIX #4: Backend path resolution for distribution**
+        const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+        
+        let backendPath;
+        let workingDir;
+        
+                    if (isDev) {
+                // Development: use minimal backend for testing
+                backendPath = path.join(__dirname, 'python-backend', 'api_server_minimal.py');
+                workingDir = path.join(__dirname, 'python-backend');
+            } else {
+                // Distribution: use minimal backend from resources
+                backendPath = path.join(process.resourcesPath, 'python-backend', 'api_server_minimal.py');
+                workingDir = path.join(process.resourcesPath, 'python-backend');
+            }
+        
+        console.log(`Starting Python backend from: ${backendPath}`);
+        console.log(`Working directory: ${workingDir}`);
+        
+        // Determine Python executable
+        let pythonCmd;
+        if (isDev) {
+            // Development: use system Python
+            pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        } else {
+            // Production: use bundled portable Python
+            if (process.platform === 'win32') {
+                pythonCmd = path.join(process.resourcesPath, 'python-portable', 'python.exe');
+            } else {
+                // macOS: use bundled portable Python
+                pythonCmd = path.join(process.resourcesPath, 'python-portable', 'bin', 'python3');
+            }
+        }
         
         // Start Python process
-        pythonProcess = spawn('python', [backendPath], {
-            cwd: path.join(__dirname, '..'),
-            stdio: ['pipe', 'pipe', 'pipe']
+        let pythonEnv = { ...process.env };
+        
+        if (!isDev) {
+            // Production: set up environment for portable Python
+            const portablePythonDir = path.join(process.resourcesPath, 'python-portable');
+            
+            if (process.platform === 'win32') {
+                // Windows: set up environment for portable Python
+                const sitePackagesDir = path.join(portablePythonDir, 'Lib', 'site-packages');
+                
+                pythonEnv.PYTHONHOME = portablePythonDir;
+                pythonEnv.PYTHONPATH = `${sitePackagesDir};${workingDir}`;
+                pythonEnv.PATH = `${portablePythonDir};${pythonEnv.PATH}`;
+            } else {
+                // macOS: set up environment for portable Python
+                const sitePackagesDir = path.join(portablePythonDir, 'lib', 'python3.12', 'site-packages');
+                
+                pythonEnv.PYTHONHOME = portablePythonDir;
+                pythonEnv.PYTHONPATH = `${sitePackagesDir}:${workingDir}`;
+                pythonEnv.PATH = `${path.join(portablePythonDir, 'bin')}:${pythonEnv.PATH}`;
+            }
+        } else {
+            // Development: ensure Python can find dependencies
+            pythonEnv.PYTHONPATH = workingDir;
+        }
+        
+        pythonProcess = spawn(pythonCmd, [backendPath], {
+            cwd: workingDir,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: pythonEnv
         });
 
         pythonProcess.stdout.on('data', (data) => {
@@ -71,6 +129,16 @@ function startPythonBackend() {
 
         pythonProcess.on('close', (code) => {
             console.log(`Python backend exited with code ${code}`);
+            
+            // If backend crashes, show error to user
+            if (code !== 0 && mainWindow) {
+                showErrorDialog(`Python backend stopped unexpectedly (code: ${code}). Please check your API configuration.`);
+            }
+        });
+
+        pythonProcess.on('error', (error) => {
+            console.error('Failed to start Python process:', error);
+            showErrorDialog('Failed to start Python backend. Please ensure Python is available on your system.');
         });
 
         // Wait for backend to be ready
@@ -103,7 +171,7 @@ async function checkBackendHealth() {
     } catch (error) {
         console.error('Backend not ready:', error.message);
         
-        // Retry after 2 seconds
+        // Retry after 2 seconds, but give up after reasonable time
         setTimeout(checkBackendHealth, 2000);
     }
 }

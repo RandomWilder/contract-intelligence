@@ -1,0 +1,28 @@
+# Simple backend requirements for Electron app
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Keep your existing core dependencies
+streamlit==1.37.1
+openai>=1.55.3
+chromadb==0.5.5
+python-dotenv==1.0.1
+
+# Google Cloud dependencies
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
+google-cloud-vision==3.7.4
+
+# Document processing
+PyPDF2==3.0.1
+python-docx==1.1.2
+Pillow==10.4.0
+opencv-python-headless==4.10.0.84
+
+# Core utilities
+requests==2.32.3
+numpy==1.26.4
+keyring==25.2.1
+pandas==2.2.2
+tiktoken==0.7.0

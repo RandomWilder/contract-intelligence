@@ -1,0 +1,203 @@
+// Settings page functionality
+const API_BASE_URL = 'http://127.0.0.1:8503';
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    refreshStatus();
+});
+
+// Go back to main page
+function goBack() {
+    window.location.href = 'index.html';
+}
+
+// Show/hide messages
+function showMessage(elementId, message, type = 'success') {
+    const messageEl = document.getElementById(elementId);
+    messageEl.textContent = message;
+    messageEl.className = `message ${type}`;
+    messageEl.style.display = 'block';
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        messageEl.style.display = 'none';
+    }, 5000);
+}
+
+// Update status indicator
+function updateStatusIndicator(elementId, connected, text) {
+    const statusEl = document.getElementById(elementId);
+    statusEl.className = `status-indicator ${connected ? 'status-connected' : 'status-disconnected'}`;
+    statusEl.textContent = text;
+}
+
+// Refresh overall status
+async function refreshStatus() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/settings`);
+        const data = await response.json();
+        
+        // Update status indicators
+        updateStatusIndicator('openai-status', data.openai_configured, 
+            data.openai_configured ? 'Connected' : 'Not Connected');
+        
+        updateStatusIndicator('google-status', data.google_configured, 
+            data.google_configured ? 'Connected' : 'Not Connected');
+        
+        // Update status overview
+        document.getElementById('status-openai').textContent = 
+            data.openai_configured ? '✅ Connected' : '❌ Not Connected';
+        
+        document.getElementById('status-google').textContent = 
+            data.google_configured ? '✅ Connected' : '❌ Not Connected';
+        
+        // Update available features
+        const features = [];
+        if (data.openai_configured) features.push('AI Chat', 'Document Analysis');
+        if (data.google_configured) features.push('OCR', 'Drive Access');
+        
+        document.getElementById('status-features').textContent = 
+            features.length > 0 ? features.join(', ') : 'None (configure services above)';
+            
+    } catch (error) {
+        console.error('Failed to refresh status:', error);
+        showMessage('openai-message', 'Failed to connect to backend', 'error');
+    }
+}
+
+// OpenAI Functions
+async function testAndSaveOpenAI() {
+    const apiKey = document.getElementById('openai-key').value.trim();
+    const saveBtn = document.getElementById('openai-save-btn');
+    
+    if (!apiKey) {
+        showMessage('openai-message', 'Please enter an API key', 'error');
+        return;
+    }
+    
+    // Show loading state
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = 'Testing Key... <span class="loading">⏳</span>';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/settings/openai`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showMessage('openai-message', 
+                `✅ ${data.message} (${data.models_available} models available)`, 'success');
+            document.getElementById('openai-key').value = ''; // Clear for security
+            refreshStatus();
+        } else {
+            showMessage('openai-message', `❌ ${data.detail}`, 'error');
+        }
+        
+    } catch (error) {
+        console.error('OpenAI test failed:', error);
+        showMessage('openai-message', '❌ Failed to test API key. Check your connection.', 'error');
+    } finally {
+        // Reset button
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Test & Save Key';
+    }
+}
+
+// Google Functions
+async function uploadGoogleCredentials() {
+    const fileInput = document.getElementById('google-credentials');
+    const uploadBtn = document.getElementById('google-upload-btn');
+    const authBtn = document.getElementById('google-auth-btn');
+    
+    if (!fileInput.files[0]) {
+        showMessage('google-message', 'Please select a credentials file', 'error');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    // Validate file type
+    if (!file.name.endsWith('.json')) {
+        showMessage('google-message', 'Please select a JSON file', 'error');
+        return;
+    }
+    
+    // Show loading state
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = 'Uploading... <span class="loading">⏳</span>';
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`${API_BASE_URL}/api/settings/google/upload-credentials`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showMessage('google-message', 
+                `✅ ${data.message}. Now click "Authenticate with Google" below.`, 'success');
+            authBtn.disabled = false; // Enable auth button
+            fileInput.value = ''; // Clear file input
+        } else {
+            showMessage('google-message', `❌ ${data.detail}`, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Upload failed:', error);
+        showMessage('google-message', '❌ Failed to upload credentials file', 'error');
+    } finally {
+        // Reset button
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = 'Upload Credentials';
+    }
+}
+
+async function authenticateGoogle() {
+    const authBtn = document.getElementById('google-auth-btn');
+    
+    // Show loading state
+    authBtn.disabled = true;
+    authBtn.innerHTML = 'Opening browser... <span class="loading">⏳</span>';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/settings/google/authenticate`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showMessage('google-message', 
+                `✅ ${data.message}. Services available: ${data.services.join(', ')}`, 'success');
+            refreshStatus();
+        } else {
+            showMessage('google-message', `❌ ${data.detail}`, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Authentication failed:', error);
+        showMessage('google-message', '❌ Authentication failed. Please try again.', 'error');
+    } finally {
+        // Reset button
+        authBtn.disabled = false;
+        authBtn.innerHTML = 'Authenticate with Google';
+    }
+}
+
+function showGoogleHelp() {
+    const helpDiv = document.getElementById('google-help');
+    helpDiv.style.display = helpDiv.style.display === 'none' ? 'block' : 'none';
+}
+
+// Auto-refresh status every 30 seconds
+setInterval(refreshStatus, 30000);

@@ -73,6 +73,10 @@ lerna-debug.log*
 *.dmg
 *.pkg
 
+# Electron Portable Python (Generated during build - DO NOT COMMIT)
+electron-app/python-portable/
+electron-app/python-3.12.5-embed-amd64.zip
+
 # Node.js (for web components)
 node_modules/
 npm-debug.log*

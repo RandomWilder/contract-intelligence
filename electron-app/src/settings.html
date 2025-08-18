@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Contract Intelligence Platform</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .settings-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .settings-section {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .settings-section h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .btn {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        
+        .btn:hover {
+            background: #005a9e;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .back-btn:hover {
+            background: #5a6268;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            display: inline-block;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <button class="back-btn" onclick="goBack()">← Back to Main</button>
+    
+    <div class="settings-container">
+        <h1>Settings</h1>
+        
+        <!-- OpenAI Settings -->
+        <div class="settings-section">
+            <h2>OpenAI Configuration</h2>
+            <div id="openai-status" class="status-indicator status-disconnected">Not Connected</div>
+            
+            <div id="openai-message" class="message"></div>
+            
+            <div class="form-group">
+                <label for="openai-key">OpenAI API Key:</label>
+                <input type="password" id="openai-key" placeholder="sk-...">
+                <div class="help-text">Enter your OpenAI API key. You can get one from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a></div>
+            </div>
+            
+            <button class="btn" onclick="testAndSaveOpenAI()" id="openai-save-btn">
+                Test & Save Key
+            </button>
+        </div>
+        
+        <!-- Google Settings -->
+        <div class="settings-section">
+            <h2>Google Services Configuration</h2>
+            <div id="google-status" class="status-indicator status-disconnected">Not Connected</div>
+            
+            <div id="google-message" class="message"></div>
+            
+            <div class="form-group">
+                <label for="google-credentials">Google Credentials File:</label>
+                <input type="file" id="google-credentials" accept=".json">
+                <div class="help-text">
+                    Upload your Google OAuth2 credentials JSON file. 
+                    <a href="#" onclick="showGoogleHelp()">How to get this file?</a>
+                </div>
+            </div>
+            
+            <button class="btn" onclick="uploadGoogleCredentials()" id="google-upload-btn">
+                Upload Credentials
+            </button>
+            
+            <button class="btn btn-success" onclick="authenticateGoogle()" id="google-auth-btn" disabled>
+                Authenticate with Google
+            </button>
+            
+            <div id="google-help" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                <h4>How to get Google credentials:</h4>
+                <ol>
+                    <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                    <li>Create a new project or select an existing one</li>
+                    <li>Enable these APIs: Vision API, Drive API, Gmail API</li>
+                    <li>Go to "Credentials" → "Create Credentials" → "OAuth client ID"</li>
+                    <li>Choose "Desktop application"</li>
+                    <li>Download the JSON file and upload it here</li>
+                </ol>
+            </div>
+        </div>
+        
+        <!-- Status Overview -->
+        <div class="settings-section">
+            <h2>Connection Status</h2>
+            <div id="status-overview">
+                <p><strong>OpenAI:</strong> <span id="status-openai">Checking...</span></p>
+                <p><strong>Google Services:</strong> <span id="status-google">Checking...</span></p>
+                <p><strong>Available Features:</strong> <span id="status-features">Loading...</span></p>
+            </div>
+            
+            <button class="btn" onclick="refreshStatus()">Refresh Status</button>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+</html>

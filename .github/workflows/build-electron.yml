@@ -11,7 +11,7 @@ on:
         default: 'manual'
 
 env:
-  PYTHON_VERSION: '3.11'
+  PYTHON_VERSION: '3.12'
   NODE_VERSION: '18'
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('ragflow/backend/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('ragflow/electron-app/python-backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -60,41 +60,70 @@ jobs:
         working-directory: ragflow/electron-app
         run: npm ci
 
-      - name: Install Python dependencies
-        working-directory: ragflow/backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Prepare Python backend for bundling
+      - name: Prepare portable Python for Windows
+        if: matrix.platform == 'win'
         shell: bash
+        working-directory: ragflow/electron-app
         run: |
-          # Create python-backend directory in electron-app
-          mkdir -p ragflow/electron-app/python-backend
+          # Download Python 3.12 embeddable package for Windows
+          curl -L -o python-embed.zip https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip
           
-          # Copy backend directory contents
-          if [ -d "ragflow/backend" ]; then
-            cp -r ragflow/backend/* ragflow/electron-app/python-backend/
-          fi
+          # Extract to python-portable directory
+          mkdir -p python-portable
+          cd python-portable
+          unzip ../python-embed.zip
           
-          # Copy essential Python files from ragflow root
-          cd ragflow
-          for file in contract_intelligence.py streamlit_app.py utils.py; do
-            if [ -f "$file" ]; then
-              cp "$file" electron-app/python-backend/
-            fi
-          done
+          # Enable site-packages by uncommenting import site in python312._pth
+          sed -i 's/^#import site/import site/' python312._pth
           
-          # Copy requirements.txt if it exists at root
-          if [ -f "requirements_desktop.txt" ]; then
-            cp requirements_desktop.txt electron-app/python-backend/requirements.txt
-          fi
+          # Download and install pip
+          curl -L -o get-pip.py https://bootstrap.pypa.io/get-pip.py
+          ./python.exe get-pip.py --target Lib/site-packages
+          
+          # Install required packages
+          ./python.exe -m pip install setuptools wheel --target Lib/site-packages
+          ./python.exe -m pip install -r ../python-backend/requirements.txt --target Lib/site-packages
+
+      - name: Prepare portable Python for macOS
+        if: matrix.platform == 'mac'
+        shell: bash
+        working-directory: ragflow/electron-app
+        run: |
+          # Download Python 3.12 for macOS (using python.org installer)
+          curl -L -o python-installer.pkg https://www.python.org/ftp/python/3.12.5/python-3.12.5-macos11.pkg
+          
+          # Create a temporary directory to extract Python
+          mkdir -p temp-python
+          cd temp-python
+          
+          # Extract the installer
+          xar -xf ../python-installer.pkg
+          
+          # Extract the Python framework
+          cd Python_Framework.pkg
+          cat Payload | gunzip -dc | cpio -i
+          
+          # Copy Python framework to python-portable
+          cd ..
+          mkdir -p ../python-portable
+          cp -R Library/Frameworks/Python.framework/Versions/3.12/* ../python-portable/
+          
+          # Install pip and dependencies
+          cd ../python-portable
+          ./bin/python3 -m ensurepip
+          ./bin/python3 -m pip install --upgrade pip
+          ./bin/python3 -m pip install -r ../python-backend/requirements.txt
 
       - name: Verify backend preparation
         working-directory: ragflow/electron-app
         run: |
           echo "Contents of python-backend directory:"
           ls -la python-backend/ || echo "python-backend directory not found"
+          
+          if [ "${{ matrix.platform }}" == "win" ]; then
+            echo "Contents of python-portable directory:"
+            ls -la python-portable/ || echo "python-portable directory not found"
+          fi
         shell: bash
 
       - name: Update Electron app package.json version
