@@ -174,8 +174,19 @@ jobs:
             VERSION="${{ github.ref_name }}"
             # Remove 'v' prefix if present
             VERSION_CLEAN=${VERSION#v}
-            echo "Setting version to: $VERSION_CLEAN"
-            npm version "$VERSION_CLEAN" --no-git-tag-version
+            echo "Target version: $VERSION_CLEAN"
+            
+            # Check current version in package.json
+            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            echo "Current version: $CURRENT_VERSION"
+            
+            # Only update if versions differ
+            if [ "$CURRENT_VERSION" != "$VERSION_CLEAN" ]; then
+              echo "Updating version from $CURRENT_VERSION to $VERSION_CLEAN"
+              npm version "$VERSION_CLEAN" --no-git-tag-version
+            else
+              echo "Version already correct: $CURRENT_VERSION - no update needed"
+            fi
           else
             echo "Not a tag build, keeping current version"
           fi

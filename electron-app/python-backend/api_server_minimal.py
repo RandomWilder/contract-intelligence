@@ -204,7 +204,7 @@ def extract_text_from_txt(file_path: str) -> str:
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.4.21"
+    version="1.5.9"
 )
 
 # Enable CORS for Electron frontend
@@ -227,7 +227,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.4.21",
+        "version": "1.5.9",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None
@@ -451,7 +451,7 @@ async def get_config():
     return {
         "openai_models": ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
         "supported_file_types": ["pdf", "docx", "txt"],
-        "version": "1.4.21",
+        "version": "1.5.9",
         "backend_type": "minimal"
     }
 
