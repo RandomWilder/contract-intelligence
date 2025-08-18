@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: ragflow/electron-app/package-lock.json
+          cache-dependency-path: electron-app/package-lock.json
 
       - name: Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
@@ -52,18 +52,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('ragflow/electron-app/python-backend/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('electron-app/python-backend/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install Node.js dependencies
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: npm ci
 
       - name: Prepare portable Python for Windows
         if: matrix.platform == 'win'
         shell: bash
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: |
           # Download Python 3.12 embeddable package for Windows
           curl -L -o python-embed.zip https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip
@@ -87,7 +87,7 @@ jobs:
       - name: Prepare portable Python for macOS
         if: matrix.platform == 'mac'
         shell: bash
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: |
           # Download Python 3.12 for macOS (using python.org installer)
           curl -L -o python-installer.pkg https://www.python.org/ftp/python/3.12.5/python-3.12.5-macos11.pkg
@@ -115,7 +115,7 @@ jobs:
           ./bin/python3 -m pip install -r ../python-backend/requirements.txt
 
       - name: Verify backend preparation
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: |
           echo "Contents of python-backend directory:"
           ls -la python-backend/ || echo "python-backend directory not found"
@@ -127,7 +127,7 @@ jobs:
         shell: bash
 
       - name: Update Electron app package.json version
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
@@ -136,7 +136,7 @@ jobs:
         shell: bash
 
       - name: Verify build assets
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: |
           echo "Build assets verification:"
           ls -la build/ || echo "build directory not found"
@@ -161,20 +161,20 @@ jobs:
 
       - name: Build Electron app (Windows)
         if: matrix.platform == 'win'
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: npm run build-win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Electron app (macOS)
         if: matrix.platform == 'mac'
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: npm run build-mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify build output
-        working-directory: ragflow/electron-app
+        working-directory: electron-app
         run: |
           echo "Build completed. Contents of dist directory:"
           ls -la dist/ || echo "No dist directory found"
@@ -187,7 +187,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ragflow/electron-app/dist/*.${{ matrix.installer-ext }}
+          path: electron-app/dist/*.${{ matrix.installer-ext }}
           retention-days: 90
 
   release:
