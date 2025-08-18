@@ -62,27 +62,38 @@ jobs:
 
       - name: Prepare portable Python for Windows
         if: matrix.platform == 'win'
-        shell: bash
+        shell: powershell
         working-directory: electron-app
         run: |
           # Download Python 3.12 embeddable package for Windows
-          curl -L -o python-embed.zip https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip
+          Write-Host "Downloading Python embeddable package..."
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip" -OutFile "python-embed.zip"
           
           # Extract to python-portable directory
-          mkdir -p python-portable
-          cd python-portable
-          unzip ../python-embed.zip
+          Write-Host "Extracting Python..."
+          New-Item -ItemType Directory -Force -Path "python-portable"
+          Expand-Archive -Path "python-embed.zip" -DestinationPath "python-portable" -Force
           
           # Enable site-packages by uncommenting import site in python312._pth
-          sed -i 's/^#import site/import site/' python312._pth
+          Write-Host "Enabling site-packages..."
+          $pthFile = "python-portable\python312._pth"
+          $content = Get-Content $pthFile
+          $content = $content -replace '^#import site', 'import site'
+          Set-Content -Path $pthFile -Value $content
+          
+          # Create Lib/site-packages directory
+          New-Item -ItemType Directory -Force -Path "python-portable\Lib\site-packages"
           
           # Download and install pip
-          curl -L -o get-pip.py https://bootstrap.pypa.io/get-pip.py
-          ./python.exe get-pip.py --target Lib/site-packages
+          Write-Host "Installing pip..."
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "python-portable\get-pip.py"
+          Set-Location "python-portable"
+          .\python.exe get-pip.py --target Lib\site-packages
           
           # Install required packages
-          ./python.exe -m pip install setuptools wheel --target Lib/site-packages
-          ./python.exe -m pip install -r ../python-backend/requirements.txt --target Lib/site-packages
+          Write-Host "Installing dependencies..."
+          .\python.exe -m pip install setuptools wheel --target Lib\site-packages
+          .\python.exe -m pip install -r ..\python-backend\requirements.txt --target Lib\site-packages
 
       - name: Prepare portable Python for macOS
         if: matrix.platform == 'mac'
