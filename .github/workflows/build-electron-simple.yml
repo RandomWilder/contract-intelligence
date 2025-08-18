@@ -212,19 +212,27 @@ jobs:
           
           echo "All prerequisites verified successfully"
 
-      - name: Verify PyInstaller files before electron-builder
+      - name: Prepare PyInstaller files for electron-builder
         working-directory: electron-app
         shell: bash
         run: |
-          echo "Verifying PyInstaller files exist before electron-builder..."
+          echo "Preparing PyInstaller files for electron-builder..."
           ls -la pyinstaller-dist/ || { echo "ERROR: pyinstaller-dist directory not found"; exit 1; }
           
+          # Create resources directory for electron-builder
+          mkdir -p resources
+          
           if [ "${{ matrix.platform }}" = "win" ]; then
-            [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not found for electron-builder"; exit 1; }
-            echo "✅ Windows executable found: pyinstaller-dist/api_server.exe"
+            [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not found"; exit 1; }
+            cp pyinstaller-dist/api_server.exe resources/
+            echo "✅ Windows executable copied to resources/api_server.exe"
+            ls -la resources/api_server.exe
           else
-            [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server not found for electron-builder"; exit 1; }
-            echo "✅ macOS executable found: pyinstaller-dist/api_server"
+            [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server not found"; exit 1; }
+            cp pyinstaller-dist/api_server resources/
+            chmod +x resources/api_server
+            echo "✅ macOS executable copied to resources/api_server"
+            ls -la resources/api_server
           fi
 
       - name: Build Electron app
