@@ -1,6 +1,6 @@
 {
   "name": "contract-intelligence-desktop",
-  "version": "1.5.5",
+  "version": "1.5.8",
   "description": "Contract Intelligence Platform - Desktop App",
   "main": "main.js",
   "scripts": {
@@ -36,11 +36,13 @@
       "dist/api_server*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns"
     },
     "nsis": {
       "oneClick": false,
