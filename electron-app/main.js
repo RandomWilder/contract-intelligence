@@ -123,12 +123,11 @@ function startPythonBackend() {
             pythonProcess = spawn(backendPath, [], spawnOptions);
         }
 
-        pythonProcess.stdout.on('data', (data) => {
-            console.log(`Python Backend: ${data}`);
-        });
+        // Note: stdout handling moved to startup timing section above
 
         pythonProcess.stderr.on('data', (data) => {
             console.error(`Python Backend Error: ${data}`);
+            handleBackendOutput(data); // Also check stderr for readiness signals
         });
 
         pythonProcess.on('close', (code) => {
@@ -151,10 +150,40 @@ function startPythonBackend() {
             showErrorDialog(errorMessage);
         });
 
-        // Wait for backend to be ready
+        // **FIX #8: Intelligent startup timing with process readiness detection**
+        let backendReadyDetected = false;
+        let healthCheckStarted = false;
+        
+        // Listen for backend readiness signals from both stdout AND stderr
+        const handleBackendOutput = (data) => {
+            const output = data.toString();
+            
+            // Detect when Uvicorn is actually running and ready
+            if (output.includes('Uvicorn running on') && !backendReadyDetected) {
+                backendReadyDetected = true;
+                console.log('Backend process signals ready - starting health checks...');
+                
+                // Start health checks immediately when backend signals ready
+                if (!healthCheckStarted) {
+                    healthCheckStarted = true;
+                    setTimeout(() => checkBackendHealth(), 1000); // Quick check after signal
+                }
+            }
+        };
+        
+        pythonProcess.stdout.on('data', (data) => {
+            console.log(`Python Backend: ${data}`);
+            handleBackendOutput(data);
+        });
+        
+        // Fallback: Start health checks after reasonable delay if no signal detected
         setTimeout(() => {
-            checkBackendHealth();
-        }, 3000);
+            if (!healthCheckStarted) {
+                console.log('Starting fallback health checks (no ready signal detected)...');
+                healthCheckStarted = true;
+                checkBackendHealth();
+            }
+        }, 8000); // Increased from 3s to 8s for production compatibility
 
     } catch (error) {
         console.error('Failed to start Python backend:', error);
@@ -169,7 +198,7 @@ function stopPythonBackend() {
     }
 }
 
-async function checkBackendHealth() {
+async function checkBackendHealth(retryCount = 0, maxRetries = 15) {
     try {
         const response = await axios.get(`${PYTHON_BACKEND_URL}/health`);
         console.log('Backend is ready:', response.data);
@@ -181,8 +210,18 @@ async function checkBackendHealth() {
     } catch (error) {
         console.error('Backend not ready:', error.message);
         
-        // Retry after 2 seconds, but give up after reasonable time
-        setTimeout(checkBackendHealth, 2000);
+        // Progressive backoff with maximum retry limit
+        if (retryCount < maxRetries) {
+            const delays = [2000, 3000, 5000, 8000, 12000]; // Progressive delays
+            const delayIndex = Math.min(retryCount, delays.length - 1);
+            const delay = delays[delayIndex];
+            
+            console.log(`Retrying health check in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})...`);
+            setTimeout(() => checkBackendHealth(retryCount + 1, maxRetries), delay);
+        } else {
+            console.error('Backend failed to start after maximum retries. Showing error to user.');
+            showErrorDialog('Backend services failed to start. Please check your API configuration and try restarting the application.');
+        }
     }
 }
 
