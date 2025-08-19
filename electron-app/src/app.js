@@ -952,7 +952,7 @@ class ContractIntelligenceApp {
         const sourceId = 'sources_' + Date.now() + Math.random().toString(36).substr(2, 9);
         
         let html = `
-            <div class="source-header" onclick="window.app.toggleSources('${sourceId}')">
+            <div class="source-header" onclick="toggleSources('${sourceId}')">
                 <span>📚 Sources (${sourceInfo.length})</span>
                 <span class="source-toggle">▼</span>
             </div>
@@ -992,19 +992,7 @@ class ContractIntelligenceApp {
         return html;
     }
 
-    // Add method to toggle sources
-    toggleSources(sourceId) {
-        const sourceList = document.getElementById(sourceId);
-        const toggle = sourceList.previousElementSibling.querySelector('.source-toggle');
-        
-        if (sourceList.classList.contains('expanded')) {
-            sourceList.classList.remove('expanded');
-            toggle.classList.remove('expanded');
-        } else {
-            sourceList.classList.add('expanded');
-            toggle.classList.add('expanded');
-        }
-    }
+
 
     detectRTL(text) {
         // Simple RTL detection for Hebrew/Arabic
@@ -1262,6 +1250,20 @@ class ContractIntelligenceApp {
  // Open settings page
 function openSettings() {
     window.location.href = 'settings.html';
+}
+
+// Global function to toggle source information
+function toggleSources(sourceId) {
+    const sourceList = document.getElementById(sourceId);
+    const toggle = sourceList.previousElementSibling.querySelector('.source-toggle');
+    
+    if (sourceList.classList.contains('expanded')) {
+        sourceList.classList.remove('expanded');
+        toggle.classList.remove('expanded');
+    } else {
+        sourceList.classList.add('expanded');
+        toggle.classList.add('expanded');
+    }
 }
 
 // Initialize app when DOM is loaded

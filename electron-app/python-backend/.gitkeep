@@ -1,0 +1,7 @@
+# This file ensures the python-backend directory is preserved in git
+# The directory structure is needed for the application to store:
+# - google_credentials.json (OAuth client credentials)
+# - google_token.pickle (OAuth tokens after authentication)
+# - app_settings.json (application configuration)
+# 
+# These files are ignored by .gitignore for security but the directory must exist
