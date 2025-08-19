@@ -705,11 +705,22 @@ def extract_text_from_image_ocr(file_path: str) -> str:
         print(f"[ERROR] OCR exception: {str(e)}")
         raise Exception(f"Failed to extract text from image using OCR: {str(e)}")
 
-# Initialize FastAPI app
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize services on startup and cleanup on shutdown"""
+    print("[INFO] Starting Contract Intelligence Minimal Backend...")
+    initialize_services()
+    yield
+    print("[INFO] Shutting down Contract Intelligence Minimal Backend...")
+
+# Initialize FastAPI app with lifespan
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.20"
+    version="1.5.21",
+    lifespan=lifespan
 )
 
 # Enable CORS for Electron frontend
@@ -721,18 +732,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    print("[INFO] Starting Contract Intelligence Minimal Backend...")
-    initialize_services()
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.20",
+        "version": "1.5.21",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None
@@ -1789,7 +1794,7 @@ async def get_config():
     return {
         "openai_models": ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
         "supported_file_types": ["pdf", "docx", "txt", "jpg", "jpeg", "png"],
-        "version": "1.5.20",
+        "version": "1.5.21",
         "backend_type": "minimal"
     }
 
@@ -2021,16 +2026,41 @@ async def get_google_auth_status():
         "credentials_file_uploaded": bool(app_settings.get("google_credentials_path"))
     }
 
+def find_available_port(start_port=8503, max_attempts=10):
+    """Find an available port starting from start_port"""
+    import socket
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('127.0.0.1', port))
+                return port
+        except OSError:
+            continue
+    return None
+
 if __name__ == "__main__":
     print("[INFO] Starting Contract Intelligence Minimal Backend Server...")
-    print("[INFO] Server will be available at: http://127.0.0.1:8503")
     
-    # Run server
-    uvicorn.run(
-        app,
-        host="127.0.0.1",
-        port=8503,
-        log_level="info",
-        access_log=False
-    )
+    # Find available port
+    port = find_available_port()
+    if port is None:
+        print("[ERROR] Could not find an available port. Please close other instances.")
+        exit(1)
+    
+    print(f"[INFO] Server will be available at: http://127.0.0.1:{port}")
+    if port != 8503:
+        print(f"[WARNING] Using port {port} instead of default 8503 due to port conflict")
+    
+    # Run server with error handling
+    try:
+        uvicorn.run(
+            app,
+            host="127.0.0.1",
+            port=port,
+            log_level="info",
+            access_log=False
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to start server: {e}")
+        exit(1)
 
