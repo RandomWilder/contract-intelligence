@@ -73,6 +73,42 @@ function startPythonBackend() {
         console.log(`Working directory: ${workingDir}`);
         console.log(`Platform: ${process.platform}, isDev: ${isDev}, isPackaged: ${app.isPackaged}`);
         
+        // **DIAGNOSTIC: Check if backend executable exists and is accessible**
+        if (!isDev) {
+            const fs = require('fs');
+            console.log(`=== PRODUCTION BACKEND DIAGNOSTIC ===`);
+            console.log(`process.resourcesPath: ${process.resourcesPath}`);
+            console.log(`Expected backend path: ${backendPath}`);
+            
+            try {
+                if (fs.existsSync(backendPath)) {
+                    const stats = fs.statSync(backendPath);
+                    console.log(`✅ Backend executable found!`);
+                    console.log(`   Size: ${stats.size} bytes`);
+                    console.log(`   Permissions: ${stats.mode.toString(8)}`);
+                    console.log(`   Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
+                } else {
+                    console.log(`❌ Backend executable NOT FOUND at: ${backendPath}`);
+                    
+                    // List what's actually in the resources directory
+                    console.log(`Contents of ${process.resourcesPath}:`);
+                    try {
+                        const files = fs.readdirSync(process.resourcesPath);
+                        files.forEach(file => {
+                            const filePath = path.join(process.resourcesPath, file);
+                            const stat = fs.statSync(filePath);
+                            console.log(`  ${stat.isDirectory() ? 'DIR' : 'FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
+                        });
+                    } catch (dirError) {
+                        console.log(`   Error reading directory: ${dirError.message}`);
+                    }
+                }
+            } catch (error) {
+                console.log(`❌ Error checking backend: ${error.message}`);
+            }
+            console.log(`=== END DIAGNOSTIC ===`);
+        }
+        
         // **FIX #5: macOS executable permissions check**
         if (!isDev && process.platform !== 'win32') {
             const fs = require('fs');
@@ -133,11 +169,19 @@ function startPythonBackend() {
         pythonProcess.on('close', (code) => {
             console.log(`Python backend exited with code ${code}`);
             
-            // If backend crashes, show error to user
+            // Enhanced error reporting for production debugging
             if (code !== 0 && mainWindow) {
+                console.log(`=== BACKEND CRASH DIAGNOSTIC ===`);
+                console.log(`Exit code: ${code}`);
+                console.log(`Platform: ${process.platform}`);
+                console.log(`isDev: ${isDev}`);
+                console.log(`Backend path: ${backendPath}`);
+                console.log(`Working directory: ${workingDir}`);
+                console.log(`=== END CRASH DIAGNOSTIC ===`);
+                
                 const errorMessage = process.platform === 'darwin' 
-                    ? `Python backend stopped unexpectedly (code: ${code}). This might be due to missing dependencies or permissions. Please check the console for details.`
-                    : `Python backend stopped unexpectedly (code: ${code}). Please check your API configuration.`;
+                    ? `Python backend stopped unexpectedly (code: ${code}). This might be due to missing dependencies, permissions, or macOS security restrictions. Please check the console for details and try right-clicking the app and selecting "Open" to bypass security warnings.`
+                    : `Python backend stopped unexpectedly (code: ${code}). Please check your API configuration and ensure all dependencies are available.`;
                 showErrorDialog(errorMessage);
             }
         });
