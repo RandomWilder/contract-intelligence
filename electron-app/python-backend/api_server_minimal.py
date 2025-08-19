@@ -335,21 +335,63 @@ def _sentence_aware_chunk(text: str, chunk_size: int = 1200, overlap: int = 300)
     """Enhanced sentence-aware chunking with better Hebrew support and larger chunks"""
     import re
     
-    # Enhanced sentence splitting for Hebrew and English
+    # CRITICAL: Protect Hebrew abbreviations before sentence splitting
+    protected_text = text
+    
+    # Common Hebrew abbreviations that should NOT be split
+    hebrew_abbreviations = [
+        r'מע"מ',  # VAT
+        r'ח"פ',   # Company registration number
+        r'ע"ר',   # Non-profit organization
+        r'בע"מ',  # Limited company
+        r'ש"ח',   # New Israeli Shekel
+        r'ת"ז',   # ID number
+        r'מ"ר',   # Square meter
+        r'כ"א',   # General
+        r'ד"ר',   # Doctor
+        r'פרופ"',  # Professor
+        r'אדון"', # Mr.
+        r'גב"',   # Mrs.
+    ]
+    
+    # Create placeholder map to protect abbreviations
+    placeholder_map = {}
+    placeholder_counter = 0
+    
+    for abbrev in hebrew_abbreviations:
+        # Find all instances of this abbreviation
+        matches = list(re.finditer(abbrev, protected_text))
+        for match in matches:
+            placeholder = f"__HEBABBREV_{placeholder_counter}__"
+            placeholder_map[placeholder] = match.group()
+            protected_text = protected_text.replace(match.group(), placeholder, 1)
+            placeholder_counter += 1
+    
+    # Enhanced sentence splitting for Hebrew and English (now on protected text)
     sentence_patterns = [
         r'[.!?]+\s+',  # English sentence endings
         r'[\u05c3\u05f3\u05f4]+\s+',  # Hebrew punctuation
-        r'(?<=[\u05d0-\u05ea])\s*\.\s*(?=[\u05d0-\u05ea\u0590-\u05FF])',  # Hebrew periods
+        r'(?<=[\u05d0-\u05ea])\s*\.\s*(?=[\u05d0-\u05ea\u0590-\u05FF])',  # Hebrew periods (protected from abbreviations)
         r'(?<=\d)\s*\.\s*(?=[\u05d0-\u05ea])',  # Numbers followed by Hebrew
     ]
     
     # Split text into sentences using multiple patterns
-    sentences = [text]  # Start with full text
+    sentences = [protected_text]  # Start with protected text
     for pattern in sentence_patterns:
         new_sentences = []
         for sent in sentences:
             new_sentences.extend(re.split(pattern, sent))
         sentences = new_sentences
+    
+    # Restore Hebrew abbreviations in all sentences
+    restored_sentences = []
+    for sentence in sentences:
+        restored_sentence = sentence
+        for placeholder, original in placeholder_map.items():
+            restored_sentence = restored_sentence.replace(placeholder, original)
+        restored_sentences.append(restored_sentence)
+    
+    sentences = restored_sentences
     
     # Clean up sentences
     sentences = [s.strip() for s in sentences if s.strip() and len(s) > 10]
@@ -620,6 +662,27 @@ def extract_text_from_image_ocr(file_path: str) -> str:
         if texts:
             # First annotation contains all detected text
             extracted_text = texts[0].description.strip()
+            
+            # CRITICAL: Fix common OCR corruption of Hebrew abbreviations
+            hebrew_abbreviation_fixes = {
+                'מע מ': 'מע"מ',  # Fix broken VAT abbreviation
+                'מע"מ': 'מע"מ',  # Ensure proper quotation marks
+                'בע מ': 'בע"מ',  # Fix broken Ltd abbreviation
+                'ש ח': 'ש"ח',    # Fix broken Shekel abbreviation
+                'ח פ': 'ח"פ',    # Fix broken company number
+                'ע ר': 'ע"ר',    # Fix broken non-profit
+                'ת ז': 'ת"ז',    # Fix broken ID number
+                'מ ר': 'מ"ר',    # Fix broken square meter
+                # Handle different quote marks that OCR might produce
+                'מע\'מ': 'מע"מ',
+                'בע\'מ': 'בע"מ',
+                'ש\'ח': 'ש"ח',
+            }
+            
+            # Apply fixes
+            for broken, fixed in hebrew_abbreviation_fixes.items():
+                extracted_text = extracted_text.replace(broken, fixed)
+            
             print(f"[DEBUG] Extracted text length: {len(extracted_text)}")
             return extracted_text
         else:
@@ -1207,11 +1270,18 @@ async def chat_query(request: Dict[str, Any]):
         numbers = re.findall(r'\d+[,.]?\d*', query)
         keyword_terms.extend(numbers)
         
-        # Add Hebrew financial keywords
+        # Add Hebrew financial keywords and abbreviations
         hebrew_keywords = ['דמי', 'שכירות', 'מחיר', 'סכום', 'עלות', 'תשלום', 'אחוז', '₪', 'שח']
+        hebrew_abbreviations = ['מע"מ', 'ח"פ', 'ע"ר', 'בע"מ', 'ש"ח', 'ת"ז', 'מ"ר']
+        
         for keyword in hebrew_keywords:
             if keyword in query:
                 keyword_terms.append(keyword)
+        
+        # Check for Hebrew abbreviations in query
+        for abbrev in hebrew_abbreviations:
+            if abbrev in query:
+                keyword_terms.append(abbrev)
         
         # Perform keyword-based search using ChromaDB's contains functionality
         if keyword_terms:
@@ -1601,7 +1671,7 @@ async def chat_query(request: Dict[str, Any]):
             logger.info(f"Using {len(good_chunks)} high-quality chunks for context (length: {len(context)} chars)")
             logger.info(f"Chunk sources: {chunk_sources}")
             
-            # Enhanced system prompt for Hebrew contract analysis
+            # Enhanced system prompt for Hebrew contract analysis with modern formatting
             system_prompt = """You are an expert contract intelligence assistant specializing in Hebrew legal documents. Your enhanced capabilities include:
 
 CORE RESPONSIBILITIES:
@@ -1617,13 +1687,40 @@ HEBREW CONTRACT EXPERTISE:
 - Identify payment clauses (דמי שכירות), adjustment mechanisms (הצמדה למדד), and termination conditions
 - Extract dates, amounts, and percentages while preserving their original format
 - Understand Hebrew legal structure and clause numbering systems
+- CRITICAL: Preserve Hebrew abbreviations with quotation marks (מע"מ, בע"מ, ש"ח, ח"פ, etc.) - never split or alter these
+- Maintain proper Hebrew punctuation and formatting for legal terms
 
-RESPONSE STRUCTURE:
-- Direct, precise answer to the question
-- Relevant contract excerpts in Hebrew with translations if helpful  
-- Specific numerical details (amounts, dates, percentages) in original format
-- Source references (clause numbers, sections)
-- Context about related contract provisions when relevant
+RESPONSE FORMATTING (CRITICAL):
+You MUST format your responses using proper Markdown for modern chat interface display:
+
+**Structure your response as follows:**
+## 📋 [Main Topic/Answer]
+
+### 🔍 Key Findings:
+- **Point 1:** [Details with **bold** for emphasis]
+- **Point 2:** [Details with numbers and amounts]
+- **Point 3:** [Additional relevant information]
+
+### 📄 Contract References:
+- **סעיף [X]:** "[Exact Hebrew text from contract]"
+- **סעיף [Y]:** "[Additional Hebrew text]"
+
+### 💰 Financial Details:
+- **Amount:** [Specific amounts with currency]
+- **Dates:** [Relevant dates]
+- **Percentages:** [Any percentages or rates]
+
+### ✅ Summary:
+[Brief summary paragraph with key takeaways]
+
+**Formatting Rules:**
+- Use **bold** for important terms, amounts, and clause numbers
+- Use bullet points (•) for lists
+- Use numbered lists (1., 2., 3.) for sequential information
+- Use > blockquotes for direct contract quotations
+- Use `code formatting` for specific legal terms or references
+- Use line breaks for better readability
+- Use emojis appropriately for visual enhancement
 
 CRITICAL: Always preserve Hebrew number formatting (left-to-right) and provide exact quotations from the contract text."""
 

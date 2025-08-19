@@ -1,7 +1,16 @@
 name: Build Electron App Distribution (BACKUP - Complex Version)
 
 # DISABLED - Backup workflow preserved for reference only
-# To re-enable, uncomment the 'on:' section below
+# This workflow is disabled and kept for reference only
+on:
+  workflow_dispatch:
+    inputs:
+      manual_trigger:
+        description: 'This workflow is disabled - use build-electron-simple.yml instead'
+        required: false
+        default: 'disabled'
+
+# Original triggers (commented out):
 # on:
 #   push:
 #     tags: ['v*']

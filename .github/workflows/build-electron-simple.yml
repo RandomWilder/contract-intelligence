@@ -162,6 +162,11 @@ jobs:
             [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
             echo "macOS executable created: pyinstaller-dist/api_server"
             ls -la pyinstaller-dist/api_server
+            
+            # **FIX #7: Ensure executable permissions on macOS**
+            echo "Setting executable permissions on macOS binary..."
+            chmod +x pyinstaller-dist/api_server
+            ls -la pyinstaller-dist/api_server
           fi
           
           echo "PyInstaller build completed successfully"

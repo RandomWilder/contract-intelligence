@@ -513,6 +513,293 @@ input[type="checkbox"] {
     text-align: left;
 }
 
+/* Modern Chat Formatting Styles */
+.message-content h1.md-h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 1rem 0 0.8rem 0;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.5rem;
+}
+
+.message-content h2.md-h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #34495e;
+    margin: 0.5rem 0 0.3rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.message-content h3.md-h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #4a5568;
+    margin: 0.4rem 0 0.2rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.message-content strong.md-bold {
+    font-weight: 600;
+    color: #2d3748;
+    background: rgba(52, 152, 219, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+}
+
+.message-content code.md-code {
+    background: #f7fafc;
+    color: #e53e3e;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    border: 1px solid #e2e8f0;
+}
+
+.message-content blockquote.md-blockquote {
+    border-left: 4px solid #3498db;
+    background: #f8f9fa;
+    margin: 0.8rem 0;
+    padding: 0.8rem 1rem;
+    font-style: italic;
+    color: #5a6c7d;
+    border-radius: 0 6px 6px 0;
+}
+
+.message-content ul.md-ul {
+    margin: 0.2rem 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.message-content ol.md-ol {
+    margin: 0.2rem 0;
+    padding-left: 0;
+    list-style: none;
+    counter-reset: list-counter;
+}
+
+.message-content li.md-li {
+    margin: 0.1rem 0;
+    padding: 0.2rem 0;
+    position: relative;
+    padding-left: 1.2rem;
+}
+
+.message-content li.md-li:before {
+    content: "•";
+    color: #3498db;
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+}
+
+.message-content li.md-li-numbered {
+    margin: 0.1rem 0;
+    padding: 0.2rem 0;
+    position: relative;
+    padding-left: 1.5rem;
+    counter-increment: list-counter;
+}
+
+.message-content li.md-li-numbered:before {
+    content: counter(list-counter) ".";
+    color: #2ecc71;
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+}
+
+/* RTL Support for Lists */
+.message-content.rtl li.md-li {
+    padding-left: 0;
+    padding-right: 1.2rem;
+}
+
+.message-content.rtl li.md-li:before {
+    left: auto;
+    right: 0;
+}
+
+.message-content.rtl li.md-li-numbered {
+    padding-left: 0;
+    padding-right: 1.5rem;
+}
+
+.message-content.rtl li.md-li-numbered:before {
+    left: auto;
+    right: 0;
+}
+
+/* Hebrew Contract Terms Highlighting */
+.hebrew-term {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3);
+}
+
+/* Financial Terms Highlighting */
+.financial-amount {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 3px rgba(245, 87, 108, 0.3);
+    direction: ltr;
+    display: inline-block;
+}
+
+.percentage {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 3px rgba(79, 172, 254, 0.3);
+}
+
+/* Source Information Styling - Collapsible */
+.message-sources {
+    margin-top: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+}
+
+.source-header {
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.8rem;
+    background: #f8f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.source-header:hover {
+    background: #e9ecef;
+}
+
+.source-toggle {
+    font-size: 0.7rem;
+    color: #6c757d;
+    transition: transform 0.2s ease;
+}
+
+.source-toggle.expanded {
+    transform: rotate(180deg);
+}
+
+.source-list {
+    display: none;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem 0.8rem;
+    background: white;
+}
+
+.source-list.expanded {
+    display: flex;
+}
+
+.source-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.source-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.source-file {
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.85rem;
+}
+
+.source-chunk {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.source-confidence {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.confidence-bar {
+    width: 60px;
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745 0%, #20c997 50%, #17a2b8 100%);
+    transition: width 0.3s ease;
+}
+
+.confidence-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #495057;
+    min-width: 35px;
+}
+
+/* Enhanced Message Animation */
+.message {
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* RTL Support for Hebrew Content */
+.message-content.rtl {
+    direction: rtl;
+    text-align: right;
+}
+
+.message-content.rtl .financial-amount,
+.message-content.rtl .percentage {
+    direction: ltr;
+    display: inline-block;
+}
+
 /* Chat Input */
 .chat-input-container {
     background: white;

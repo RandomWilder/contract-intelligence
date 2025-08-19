@@ -851,7 +851,13 @@ class ContractIntelligenceApp {
         
         const messageContent = document.createElement('div');
         messageContent.className = `message-content ${isRTL ? 'rtl' : ''}`;
-        messageContent.textContent = content;
+        
+        // Enhanced: Parse and render Markdown for rich formatting
+        if (role === 'assistant') {
+            messageContent.innerHTML = this.parseMarkdown(content);
+        } else {
+            messageContent.textContent = content;
+        }
         
         const messageTime = document.createElement('div');
         messageTime.className = 'message-time';
@@ -860,10 +866,144 @@ class ContractIntelligenceApp {
         messageDiv.appendChild(messageContent);
         messageDiv.appendChild(messageTime);
         
+        // Add source info if available
+        if (sourceInfo && sourceInfo.length > 0) {
+            const sourceDiv = document.createElement('div');
+            sourceDiv.className = 'message-sources';
+            sourceDiv.innerHTML = this.formatSourceInfo(sourceInfo);
+            messageDiv.appendChild(sourceDiv);
+        }
+        
         container.appendChild(messageDiv);
         
-        // Scroll to bottom
+        // Scroll to bottom with smooth animation
         container.scrollTop = container.scrollHeight;
+    }
+
+    parseMarkdown(text) {
+        // Enhanced Markdown parser for modern chat interface
+        let html = text;
+        
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h3 class="md-h3">$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2 class="md-h2">$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1 class="md-h1">$1</h1>');
+        
+        // Bold text
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="md-bold">$1</strong>');
+        
+        // Code/inline code
+        html = html.replace(/`([^`]+)`/g, '<code class="md-code">$1</code>');
+        
+        // Blockquotes
+        html = html.replace(/^> (.*$)/gim, '<blockquote class="md-blockquote">$1</blockquote>');
+        
+        // Bullet points
+        html = html.replace(/^- (.*$)/gim, '<li class="md-li">$1</li>');
+        html = html.replace(/^• (.*$)/gim, '<li class="md-li">$1</li>');
+        
+        // Numbered lists
+        html = html.replace(/^(\d+)\. (.*$)/gim, '<li class="md-li-numbered" data-number="$1">$2</li>');
+        
+        // Wrap consecutive list items in ul/ol
+        html = html.replace(/(<li class="md-li">.*?<\/li>)/gs, '<ul class="md-ul">$1</ul>');
+        html = html.replace(/(<li class="md-li-numbered".*?<\/li>)/gs, '<ol class="md-ol">$1</ol>');
+        
+        // Line breaks - more compact spacing
+        html = html.replace(/\n\n/g, '<br>');
+        html = html.replace(/\n/g, '<br>');
+        
+        // Hebrew contract terms highlighting
+        html = this.highlightHebrewTerms(html);
+        
+        // Financial amounts highlighting
+        html = this.highlightFinancialTerms(html);
+        
+        return html;
+    }
+
+    highlightHebrewTerms(html) {
+        // Highlight common Hebrew contract terms
+        const hebrewTerms = [
+            'סעיף', 'פסקה', 'תנאי', 'הסכם', 'חוזה',
+            'שכירות', 'תשלום', 'דמי', 'הצמדה', 'עדכון',
+            'מע"מ', 'בע"מ', 'ש"ח', 'ח"פ', 'ע"ר'
+        ];
+        
+        hebrewTerms.forEach(term => {
+            const regex = new RegExp(`\\b${term}\\b`, 'g');
+            html = html.replace(regex, `<span class="hebrew-term">${term}</span>`);
+        });
+        
+        return html;
+    }
+
+    highlightFinancialTerms(html) {
+        // Highlight financial amounts and numbers
+        html = html.replace(/(\d+[,.]?\d*\s*(?:₪|שח|ש"ח|אלף|מיליון))/g, '<span class="financial-amount">$1</span>');
+        html = html.replace(/(\d+\.?\d*\s*%)/g, '<span class="percentage">$1</span>');
+        
+        return html;
+    }
+
+    formatSourceInfo(sourceInfo) {
+        if (!sourceInfo || sourceInfo.length === 0) return '';
+        
+        const sourceId = 'sources_' + Date.now() + Math.random().toString(36).substr(2, 9);
+        
+        let html = `
+            <div class="source-header" onclick="window.app.toggleSources('${sourceId}')">
+                <span>📚 Sources (${sourceInfo.length})</span>
+                <span class="source-toggle">▼</span>
+            </div>
+            <div class="source-list" id="${sourceId}">
+        `;
+        
+        sourceInfo.forEach((source, index) => {
+            // Fix confidence calculation - ensure we get the right score
+            let confidence = 0;
+            if (source.reranked_score && source.reranked_score > 0) {
+                confidence = source.reranked_score;
+            } else if (source.boosted_score && source.boosted_score > 0) {
+                confidence = source.boosted_score;
+            } else if (source.similarity && source.similarity > 0) {
+                confidence = source.similarity;
+            }
+            
+            const confidencePercent = Math.round(confidence * 100);
+            
+            html += `
+                <div class="source-item">
+                    <div class="source-info">
+                        <span class="source-file">📄 ${source.filename}</span>
+                        <span class="source-chunk">Chunk ${source.chunk_index}</span>
+                    </div>
+                    <div class="source-confidence">
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                        </div>
+                        <span class="confidence-text">${confidencePercent}%</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        return html;
+    }
+
+    // Add method to toggle sources
+    toggleSources(sourceId) {
+        const sourceList = document.getElementById(sourceId);
+        const toggle = sourceList.previousElementSibling.querySelector('.source-toggle');
+        
+        if (sourceList.classList.contains('expanded')) {
+            sourceList.classList.remove('expanded');
+            toggle.classList.remove('expanded');
+        } else {
+            sourceList.classList.add('expanded');
+            toggle.classList.add('expanded');
+        }
     }
 
     detectRTL(text) {

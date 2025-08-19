@@ -71,6 +71,28 @@ function startPythonBackend() {
         
         console.log(`Starting Python backend from: ${backendPath}`);
         console.log(`Working directory: ${workingDir}`);
+        console.log(`Platform: ${process.platform}, isDev: ${isDev}, isPackaged: ${app.isPackaged}`);
+        
+        // **FIX #5: macOS executable permissions check**
+        if (!isDev && process.platform !== 'win32') {
+            const fs = require('fs');
+            try {
+                // Check if executable exists
+                if (!fs.existsSync(backendPath)) {
+                    throw new Error(`Backend executable not found at: ${backendPath}`);
+                }
+                
+                // Ensure executable permissions on macOS/Linux
+                const stats = fs.statSync(backendPath);
+                if (!(stats.mode & parseInt('111', 8))) {
+                    console.log('Setting executable permissions on backend...');
+                    fs.chmodSync(backendPath, stats.mode | parseInt('755', 8));
+                }
+            } catch (error) {
+                console.error('Backend executable check failed:', error);
+                throw error;
+            }
+        }
         
         // Start backend process
         let spawnOptions = {
@@ -88,6 +110,16 @@ function startPythonBackend() {
             pythonProcess = spawn(pythonCmd, [backendPath], spawnOptions);
         } else {
             // Production: run PyInstaller executable directly
+            // **FIX #6: Enhanced environment setup for production**
+            let productionEnv = { ...process.env };
+            
+            // Set library paths for macOS
+            if (process.platform === 'darwin') {
+                productionEnv.DYLD_LIBRARY_PATH = workingDir + ':' + (productionEnv.DYLD_LIBRARY_PATH || '');
+                productionEnv.DYLD_FALLBACK_LIBRARY_PATH = workingDir + ':' + (productionEnv.DYLD_FALLBACK_LIBRARY_PATH || '');
+            }
+            
+            spawnOptions.env = productionEnv;
             pythonProcess = spawn(backendPath, [], spawnOptions);
         }
 
@@ -104,13 +136,19 @@ function startPythonBackend() {
             
             // If backend crashes, show error to user
             if (code !== 0 && mainWindow) {
-                showErrorDialog(`Python backend stopped unexpectedly (code: ${code}). Please check your API configuration.`);
+                const errorMessage = process.platform === 'darwin' 
+                    ? `Python backend stopped unexpectedly (code: ${code}). This might be due to missing dependencies or permissions. Please check the console for details.`
+                    : `Python backend stopped unexpectedly (code: ${code}). Please check your API configuration.`;
+                showErrorDialog(errorMessage);
             }
         });
 
         pythonProcess.on('error', (error) => {
             console.error('Failed to start Python process:', error);
-            showErrorDialog('Failed to start Python backend. Please ensure Python is available on your system.');
+            const errorMessage = process.platform === 'darwin'
+                ? `Failed to start Python backend: ${error.message}. This might be due to missing executable permissions or dependencies.`
+                : 'Failed to start Python backend. Please ensure Python is available on your system.';
+            showErrorDialog(errorMessage);
         });
 
         // Wait for backend to be ready
