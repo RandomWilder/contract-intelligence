@@ -8,7 +8,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Go back to main page
 function goBack() {
-    window.location.href = 'index.html';
+    // Add parameter to indicate we're returning from settings
+    // This allows the main app to skip setup checks and load faster
+    window.location.replace('index.html?from=settings');
 }
 
 // Show/hide messages

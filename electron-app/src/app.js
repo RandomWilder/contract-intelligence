@@ -33,11 +33,59 @@ class ContractIntelligenceApp {
         
         // Show loading overlay initially
         this.showLoadingOverlay('Starting backend services...');
+        
+        // Add fallback check for backend readiness (especially when returning from settings)
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromSettings = urlParams.get('from') === 'settings';
+        const checkDelay = fromSettings ? 500 : 2000; // Faster check if returning from settings
+        
+        setTimeout(() => {
+            if (!this.isBackendReady) {
+                console.log(`⏰ Checking backend readiness (fallback${fromSettings ? ' - from settings' : ''})...`);
+                this.checkBackendReadiness();
+            }
+        }, checkDelay);
+    }
+
+    async checkBackendReadiness() {
+        try {
+            // Try to ping the backend health endpoint
+            const response = await fetch(`${this.backendUrl}/health`, { 
+                method: 'GET',
+                timeout: 5000 
+            });
+            
+            if (response.ok) {
+                console.log('✅ Backend is ready (fallback check successful)');
+                this.isBackendReady = true;
+                this.hideLoadingOverlay();
+                this.checkAndHandleSetup();
+            } else {
+                console.log('❌ Backend not ready yet (fallback check)');
+            }
+        } catch (error) {
+            console.log('❌ Backend not accessible (fallback check):', error.message);
+            // Continue waiting for the Electron event
+        }
     }
 
     async checkAndHandleSetup() {
         try {
-            // Check if setup is needed
+            // Check if we're returning from settings page
+            const urlParams = new URLSearchParams(window.location.search);
+            const fromSettings = urlParams.get('from') === 'settings';
+            
+            if (fromSettings) {
+                console.log('🔄 Returning from settings - skipping setup check');
+                // Clean up URL parameter
+                window.history.replaceState({}, document.title, window.location.pathname);
+                // Skip setup check and load directly since user just verified credentials
+                this.setupNeeded = false;
+                this.loadInitialData();
+                return;
+            }
+            
+            // Check if setup is needed (only for fresh loads)
             const response = await fetch(`${this.backendUrl}/api/config/check-setup`);
             const setupStatus = await response.json();
             
@@ -419,7 +467,7 @@ class ContractIntelligenceApp {
             const status = await response.json();
             
             // Get Google auth status
-            const googleResponse = await fetch(`${this.backendUrl}/api/google/auth-status`);
+            const googleResponse = await fetch(`${this.backendUrl}/api/settings/google/status`);
             const googleStatus = await googleResponse.json();
             
             // Update status indicators
@@ -429,7 +477,7 @@ class ContractIntelligenceApp {
                 'OpenAI'
             );
             this.updateStatusIndicator('google-status', 
-                googleStatus.authenticated ? '✅' : (googleStatus.needs_setup ? '❌' : '⚠️'), 
+                googleStatus.status === 'authenticated' ? '✅' : (googleStatus.status === 'not_configured' ? '❌' : '⚠️'), 
                 'Google OCR'
             );
             this.updateStatusIndicator('docs-status', 
@@ -437,8 +485,7 @@ class ContractIntelligenceApp {
                 `${status.documents_count} Documents`
             );
             
-            // Update Google auth section
-            this.updateGoogleAuthSection(googleStatus);
+
             
         } catch (error) {
             console.error('Failed to update status:', error);
@@ -453,38 +500,7 @@ class ContractIntelligenceApp {
         }
     }
 
-    updateGoogleAuthSection(googleStatus) {
-        const section = document.getElementById('google-auth-section');
-        
-        if (googleStatus.authenticated) {
-            section.innerHTML = `
-                <p>✅ Google services connected</p>
-                <p class="small">OCR and Drive access available</p>
-                <button class="btn btn-secondary" onclick="app.clearGoogleCredentials()">🗑️ Clear</button>
-            `;
-        } else if (googleStatus.needs_setup) {
-            section.innerHTML = `
-                <p>❌ Google credentials file missing</p>
-                <p class="small">Path: ${googleStatus.credentials_path}</p>
-                <div style="margin: 1rem 0;">
-                    <strong>Setup Steps:</strong>
-                    <ol style="font-size: 0.8rem; margin-top: 0.5rem;">
-                        <li>Go to <a href="#" onclick="app.openGoogleConsole()">Google Cloud Console</a></li>
-                        <li>Create OAuth 2.0 Client ID (Desktop App)</li>
-                        <li>Download JSON file</li>
-                        <li>Save as: <code>google_credentials.json</code></li>
-                    </ol>
-                </div>
-                <button class="btn btn-primary" onclick="app.selectCredentialsFile()">🔍 Select Credentials File</button>
-            `;
-        } else {
-            section.innerHTML = `
-                <p>⚠️ Google services not authenticated</p>
-                <p class="small">Credentials file found, but not authenticated</p>
-                <button class="btn btn-primary" onclick="app.authenticateGoogle()">🔗 Connect</button>
-            `;
-        }
-    }
+
 
     async loadDocuments() {
         try {
@@ -643,7 +659,7 @@ class ContractIntelligenceApp {
         
         // Add individual documents
         this.documents.forEach(doc => {
-            select.innerHTML += `<option value="${doc}">${doc}</option>`;
+            select.innerHTML += `<option value="${doc.filename}">${doc.filename}</option>`;
         });
     }
 
@@ -699,7 +715,7 @@ class ContractIntelligenceApp {
         const formData = new FormData();
         formData.append('file', this.currentFile);
         formData.append('folder', document.getElementById('folder-select').value);
-        formData.append('use_ocr', document.getElementById('use-ocr').checked);
+        formData.append('use_ocr', document.getElementById('use-ocr').checked ? 'true' : 'false');
         
         this.showProgress('Processing document...');
         
@@ -856,103 +872,7 @@ class ContractIntelligenceApp {
         return rtlChars.test(text);
     }
 
-    // Google Authentication
-    async authenticateGoogle() {
-        try {
-            this.showProgress('Authenticating with Google...');
-            
-            const response = await fetch(`${this.backendUrl}/api/google/authenticate`, {
-                method: 'POST'
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showSuccess('Google authentication successful!');
-                await this.updateStatus();
-            } else {
-                this.showError('Google authentication failed');
-            }
-            
-        } catch (error) {
-            console.error('Google auth failed:', error);
-            this.showError('Authentication failed: ' + error.message);
-        } finally {
-            this.hideProgress();
-        }
-    }
 
-    async openGoogleConsole() {
-        // Open Google Cloud Console in external browser
-        window.electronAPI.openExternal && window.electronAPI.openExternal('https://console.cloud.google.com/apis/credentials');
-    }
-
-    async selectCredentialsFile() {
-        try {
-            const result = await window.electronAPI.showOpenDialog({
-                title: 'Select Google Credentials File',
-                filters: [
-                    { name: 'JSON Files', extensions: ['json'] },
-                    { name: 'All Files', extensions: ['*'] }
-                ],
-                properties: ['openFile']
-            });
-
-            if (!result.canceled && result.filePaths.length > 0) {
-                const filePath = result.filePaths[0];
-                
-                // Copy file to the expected location
-                this.showProgress('Setting up Google credentials...');
-
-                const copyResponse = await fetch(`${this.backendUrl}/api/google/setup-credentials`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        source_path: filePath
-                    })
-                });
-                
-                const result = await copyResponse.json();
-                
-                if (result.success) {
-                    this.showSuccess('Credentials file set up successfully! Now you can authenticate.');
-                    await this.updateStatus();
-                } else {
-                    this.showError('Failed to setup credentials: ' + result.message);
-                }
-            }
-        } catch (error) {
-            console.error('File selection failed:', error);
-            this.showError('Failed to select credentials file: ' + error.message);
-        } finally {
-            this.hideProgress();
-        }
-    }
- 
-    async clearGoogleCredentials() {
-        if (!confirm('Clear Google credentials?')) return;
-        
-        try {
-            const response = await fetch(`${this.backendUrl}/api/google/clear-credentials`, {
-                method: 'DELETE'
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showSuccess('Credentials cleared');
-                await this.updateStatus();
-            } else {
-                this.showError('Failed to clear credentials');
-            }
-            
-        } catch (error) {
-            console.error('Clear credentials failed:', error);
-            this.showError('Failed to clear credentials: ' + error.message);
-        }
-    }
  
     // UI helpers
     showLoadingOverlay(message = 'Loading...') {
@@ -1197,9 +1117,7 @@ class ContractIntelligenceApp {
     app.askQuickQuestion(question);
  }
  
- function authenticateGoogle() {
-    app.authenticateGoogle();
- }
+ 
  
  // Open settings page
 function openSettings() {
