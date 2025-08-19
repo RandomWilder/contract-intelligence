@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API",
     description="Backend API for Contract Intelligence Desktop App",
-    version="1.5.17",
+    version="1.5.18",
     lifespan=lifespan
 )
 
@@ -81,7 +81,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.17",
+        "version": "1.5.18",
         "ragflow_ready": rag_flow is not None
     }
 
@@ -441,7 +441,7 @@ async def get_config():
             "gpt-3.5-turbo"
         ],
         "supported_file_types": ["pdf", "docx", "txt", "jpg", "jpeg", "png"],
-        "version": "1.5.17"
+        "version": "1.5.18"
     }
 
 # Error handler

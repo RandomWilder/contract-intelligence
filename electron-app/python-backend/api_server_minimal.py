@@ -213,48 +213,60 @@ def initialize_services():
         
         # ONLY use OpenAI embeddings - NO default ChromaDB embeddings
         if not api_key:
-            raise Exception("OpenAI API key is REQUIRED for ChromaDB embeddings. Please configure in settings.")
-            
-        from chromadb.utils import embedding_functions
-        openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=api_key,
-            model_name="text-embedding-ada-002"
-        )
-        logger.info("Using OpenAI ada-002 embeddings ONLY")
-        
-        # Try to get existing collection first
-        try:
-            collection = chroma_client.get_collection(
-                name="contracts_electron",
-                embedding_function=openai_ef
+            print("[WARNING] OpenAI API key is REQUIRED for ChromaDB embeddings. Backend will run but embeddings will not work until API key is configured.")
+            openai_ef = None
+        else:
+            from chromadb.utils import embedding_functions
+            openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=api_key,
+                model_name="text-embedding-ada-002"
             )
-            logger.info("Retrieved existing collection with ada-002 embeddings")
-            
-            # Verify collection has documents
-            existing_docs = collection.count()
-            logger.info(f"Found {existing_docs} existing document chunks in ChromaDB")
-            
-        except Exception as get_error:
-            logger.info(f"Collection doesn't exist or needs recreation: {get_error}")
-            # Collection doesn't exist, create it
+            logger.info("Using OpenAI ada-002 embeddings ONLY")
+        
+        # Try to get existing collection first (only if we have embedding function)
+        if openai_ef is not None:
             try:
-                collection = chroma_client.create_collection(
+                collection = chroma_client.get_collection(
                     name="contracts_electron",
-                    embedding_function=openai_ef,
-                    metadata={
-                        "description": "Contract documents for Electron app",
-                        "embedding_model": "text-embedding-ada-002"
-                    }
+                    embedding_function=openai_ef
                 )
-                logger.info("Created new collection with ada-002 embeddings")
-            except Exception as create_error:
-                logger.error(f"Failed to create collection: {create_error}")
-                raise
+                logger.info("Retrieved existing collection with ada-002 embeddings")
+                
+                # Verify collection has documents
+                existing_docs = collection.count()
+                logger.info(f"Found {existing_docs} existing document chunks in ChromaDB")
+                
+            except Exception as get_error:
+                logger.info(f"Collection doesn't exist or needs recreation: {get_error}")
+                # Collection doesn't exist, create it
+                try:
+                    collection = chroma_client.create_collection(
+                        name="contracts_electron",
+                        embedding_function=openai_ef,
+                        metadata={
+                            "description": "Contract documents for Electron app",
+                            "embedding_model": "text-embedding-ada-002"
+                        }
+                    )
+                    logger.info("Created new collection with ada-002 embeddings")
+                except Exception as create_error:
+                    logger.error(f"Failed to create collection: {create_error}")
+                    # Don't raise - allow backend to start without collection
+                    collection = None
+        else:
+            print("[INFO] Skipping ChromaDB collection setup - no OpenAI API key configured")
+            collection = None
         
         print("[SUCCESS] ChromaDB initialized successfully")
             
     except Exception as e:
         print(f"[ERROR] Failed to initialize services: {e}")
+        # Don't raise - allow backend to continue running
+        chroma_client = None
+        collection = None
+        openai_client = None
+        contract_intelligence_engine = None
+        print("[INFO] Backend will continue running with limited functionality. Please configure API keys in settings.")
 
 def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
     """Smart semantic chunking for contracts with clause-based segmentation"""
@@ -697,7 +709,7 @@ def extract_text_from_image_ocr(file_path: str) -> str:
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.17"
+    version="1.5.18"
 )
 
 # Enable CORS for Electron frontend
@@ -720,7 +732,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.17",
+        "version": "1.5.18",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None
@@ -739,9 +751,6 @@ async def test_upload():
 @app.get("/api/test")
 async def test_endpoint():
     """Test endpoint to verify backend functionality"""
-    if not chroma_client:
-        raise HTTPException(status_code=503, detail="ChromaDB not initialized")
-    
     try:
         # Test basic functionality
         test_text = "This is a test document for the Contract Intelligence Platform."
@@ -753,37 +762,47 @@ async def test_endpoint():
             "test_results": {
                 "chunking": f"Generated {len(chunks)} chunks",
                 "openai_available": openai_client is not None,
-                "collection_name": "contracts_electron",
-                "chromadb_collections": len(chroma_client.list_collections())
+                "chromadb_available": chroma_client is not None,
+                "collection_name": "contracts_electron" if collection else "not configured",
+                "chromadb_collections": len(chroma_client.list_collections()) if chroma_client else 0
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Backend test failed: {str(e)}")
+        return {
+            "status": "partial",
+            "message": f"Backend is running but some services are not available: {str(e)}",
+            "test_results": {
+                "chunking": "available",
+                "openai_available": openai_client is not None,
+                "chromadb_available": chroma_client is not None
+            }
+        }
 
 @app.get("/api/status")
 async def get_status():
     """Get application status"""
-    if not chroma_client:
-        raise HTTPException(status_code=503, detail="ChromaDB not initialized")
-    
     try:
-        collections = chroma_client.list_collections()
+        doc_count = 0
+        collections_count = 0
         
-        # Count UNIQUE DOCUMENTS, not chunks
-        if collection:
-            results = collection.get()
-            unique_filenames = set()
-            for metadata in results['metadatas']:
-                unique_filenames.add(metadata['filename'])
-            doc_count = len(unique_filenames)
-        else:
-            doc_count = 0
+        if chroma_client:
+            collections = chroma_client.list_collections()
+            collections_count = len(collections)
+            
+            # Count UNIQUE DOCUMENTS, not chunks
+            if collection:
+                results = collection.get()
+                unique_filenames = set()
+                for metadata in results['metadatas']:
+                    unique_filenames.add(metadata['filename'])
+                doc_count = len(unique_filenames)
         
         return {
             "openai_configured": openai_client is not None,
-            "chromadb_ready": True,
-            "documents_count": doc_count,  # Now correctly shows unique documents, not chunks
-            "collections": len(collections)
+            "chromadb_ready": chroma_client is not None,
+            "collection_ready": collection is not None,
+            "documents_count": doc_count,
+            "collections_count": collections_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1770,7 +1789,7 @@ async def get_config():
     return {
         "openai_models": ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
         "supported_file_types": ["pdf", "docx", "txt", "jpg", "jpeg", "png"],
-        "version": "1.5.17",
+        "version": "1.5.18",
         "backend_type": "minimal"
     }
 
