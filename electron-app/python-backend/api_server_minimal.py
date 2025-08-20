@@ -201,10 +201,8 @@ import pandas as pd
 import tiktoken
 from dotenv import load_dotenv
 
-# Google OAuth imports
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.oauth2.credentials import Credentials
+# Google Service Account imports
+from google.oauth2 import service_account
 import pickle
 
 # Google Vision OCR
@@ -227,7 +225,6 @@ SCOPES = [
 
 # Settings storage
 SETTINGS_FILE = "app_settings.json"
-GOOGLE_TOKEN_FILE = "google_token.pickle"
 
 # Global instances
 chroma_client = None
@@ -259,27 +256,28 @@ def save_settings():
         print(f"[ERROR] Failed to save settings: {e}")
 
 def load_google_credentials():
-    """Load Google OAuth credentials"""
+    """Load Google Service Account credentials"""
     global google_credentials
     try:
-        if os.path.exists(GOOGLE_TOKEN_FILE):
-            with open(GOOGLE_TOKEN_FILE, 'rb') as f:
-                google_credentials = pickle.load(f)
-            print("[INFO] Google credentials loaded")
+        credentials_path = app_settings.get("google_credentials_path")
+        if credentials_path and os.path.exists(credentials_path):
+            google_credentials = service_account.Credentials.from_service_account_file(
+                credentials_path, scopes=SCOPES)
+            print("[INFO] Google service account credentials loaded")
             return True
     except Exception as e:
         print(f"[WARNING] Failed to load Google credentials: {e}")
     return False
 
-def save_google_credentials(credentials):
-    """Save Google OAuth credentials"""
+def save_google_credentials(credentials_path):
+    """Save Google credentials path to settings"""
     try:
-        with open(GOOGLE_TOKEN_FILE, 'wb') as f:
-            pickle.dump(credentials, f)
-        print("[INFO] Google credentials saved")
+        app_settings["google_credentials_path"] = credentials_path
+        save_settings()
+        print("[INFO] Google credentials path saved")
         return True
     except Exception as e:
-        print(f"[ERROR] Failed to save Google credentials: {e}")
+        print(f"[ERROR] Failed to save Google credentials path: {e}")
         return False
 
 def initialize_services():
@@ -729,9 +727,9 @@ def extract_text_from_pdf_ocr(file_path: str) -> str:
         # Check if credentials need refresh
         if hasattr(google_credentials, 'expired') and google_credentials.expired:
             if hasattr(google_credentials, 'refresh_token') and google_credentials.refresh_token:
-                logger.info("Refreshing expired credentials")
-                google_credentials.refresh(Request())
-                save_google_credentials(google_credentials)
+                logger.info("Service account credentials don't need refreshing")
+                # Service account credentials don't need refreshing with Request()
+                pass
             else:
                 raise Exception("Google credentials expired and cannot be refreshed")
         
@@ -806,9 +804,9 @@ def extract_text_from_image_ocr(file_path: str) -> str:
         # Check if credentials need refresh
         if hasattr(google_credentials, 'expired') and google_credentials.expired:
             if hasattr(google_credentials, 'refresh_token') and google_credentials.refresh_token:
-                print("[INFO] Refreshing expired credentials")
-                google_credentials.refresh(Request())
-                save_google_credentials(google_credentials)
+                print("[INFO] Service account credentials don't need refreshing")
+                # Service account credentials don't need refreshing with Request()
+                pass
             else:
                 raise Exception("Google credentials expired and cannot be refreshed")
         
@@ -901,7 +899,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.41",
+        "version": "1.5.42",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,
@@ -2106,7 +2104,9 @@ async def set_openai_key(request: Dict[str, Any]):
 
 @app.post("/api/settings/google/upload-credentials")
 async def upload_google_credentials(file: UploadFile = File(...)):
-    """Upload Google OAuth credentials file"""
+    """Upload Google Service Account credentials file"""
+    global google_credentials
+    
     try:
         if not file.filename.endswith('.json'):
             raise HTTPException(status_code=400, detail="Please upload a JSON credentials file")
@@ -2115,58 +2115,38 @@ async def upload_google_credentials(file: UploadFile = File(...)):
         content = await file.read()
         credentials_data = json.loads(content)
         
-        # Basic validation
-        if "installed" not in credentials_data and "web" not in credentials_data:
-            raise HTTPException(status_code=400, detail="Invalid credentials file format")
+        # Basic validation for service account credentials
+        if "type" not in credentials_data or credentials_data.get("type") != "service_account":
+            raise HTTPException(status_code=400, detail="Invalid service account credentials. Please upload a service account JSON file.")
         
         # Save credentials file
-        credentials_path = "google_credentials.json"
+        credentials_path = "google_service_account.json"
         with open(credentials_path, 'wb') as f:
             f.write(content)
         
-        app_settings["google_credentials_path"] = credentials_path
-        save_settings()
-        
-        return {
-            "success": True,
-            "message": "Google credentials file uploaded successfully",
-            "next_step": "authenticate"
-        }
+        # Load the credentials immediately
+        try:
+            google_credentials = service_account.Credentials.from_service_account_file(
+                credentials_path, scopes=SCOPES)
+            
+            # Save the path to settings
+            save_google_credentials(credentials_path)
+            
+            return {
+                "success": True,
+                "message": "Google service account credentials verified and activated",
+                "services": ["OCR", "Drive", "Gmail"]
+            }
+        except Exception as cred_error:
+            # Clean up the file if validation fails
+            if os.path.exists(credentials_path):
+                os.remove(credentials_path)
+            raise HTTPException(status_code=400, detail=f"Invalid service account credentials: {str(cred_error)}")
         
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON file")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload credentials: {str(e)}")
-
-@app.post("/api/settings/google/authenticate")
-async def authenticate_google():
-    """Start Google OAuth authentication flow"""
-    global google_credentials
-    
-    try:
-        credentials_path = app_settings.get("google_credentials_path")
-        if not credentials_path or not os.path.exists(credentials_path):
-            raise HTTPException(status_code=400, detail="Please upload credentials file first")
-        
-        # Create OAuth flow
-        flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-        
-        # Run local server flow (will open browser)
-        credentials = flow.run_local_server(port=0)
-        
-        # Save credentials
-        google_credentials = credentials
-        save_google_credentials(credentials)
-        
-        return {
-            "success": True,
-            "message": "Google authentication completed successfully",
-            "services": ["OCR", "Drive", "Gmail"]
-        }
-        
-    except Exception as e:
-        print(f"[ERROR] Google authentication failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
 
 @app.get("/api/settings/google/status")
 async def get_google_auth_status():
@@ -2177,20 +2157,9 @@ async def get_google_auth_status():
     services = []
     
     if google_credentials:
-        if google_credentials.expired:
-            if google_credentials.refresh_token:
-                try:
-                    google_credentials.refresh(Request())
-                    save_google_credentials(google_credentials)
-                    status = "authenticated"
-                    services = ["OCR", "Drive", "Gmail"]
-                except:
-                    status = "expired"
-            else:
-                status = "expired"
-        else:
-            status = "authenticated"
-            services = ["OCR", "Drive", "Gmail"]
+        # Service account credentials don't expire like OAuth tokens
+        status = "authenticated"
+        services = ["OCR", "Drive", "Gmail"]
     
     return {
         "status": status,

@@ -115,10 +115,9 @@ async function testAndSaveOpenAI() {
 async function uploadGoogleCredentials() {
     const fileInput = document.getElementById('google-credentials');
     const uploadBtn = document.getElementById('google-upload-btn');
-    const authBtn = document.getElementById('google-auth-btn');
     
     if (!fileInput.files[0]) {
-        showMessage('google-message', 'Please select a credentials file', 'error');
+        showMessage('google-message', 'Please select a service account credentials file', 'error');
         return;
     }
     
@@ -147,9 +146,9 @@ async function uploadGoogleCredentials() {
         
         if (response.ok) {
             showMessage('google-message', 
-                `✅ ${data.message}. Now click "Authenticate with Google" below.`, 'success');
-            authBtn.disabled = false; // Enable auth button
+                `✅ ${data.message}. Services available: ${data.services.join(', ')}`, 'success');
             fileInput.value = ''; // Clear file input
+            refreshStatus(); // Update status indicators
         } else {
             showMessage('google-message', `❌ ${data.detail}`, 'error');
         }
@@ -164,37 +163,7 @@ async function uploadGoogleCredentials() {
     }
 }
 
-async function authenticateGoogle() {
-    const authBtn = document.getElementById('google-auth-btn');
-    
-    // Show loading state
-    authBtn.disabled = true;
-    authBtn.innerHTML = 'Opening browser... <span class="loading">⏳</span>';
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/settings/google/authenticate`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showMessage('google-message', 
-                `✅ ${data.message}. Services available: ${data.services.join(', ')}`, 'success');
-            refreshStatus();
-        } else {
-            showMessage('google-message', `❌ ${data.detail}`, 'error');
-        }
-        
-    } catch (error) {
-        console.error('Authentication failed:', error);
-        showMessage('google-message', '❌ Authentication failed. Please try again.', 'error');
-    } finally {
-        // Reset button
-        authBtn.disabled = false;
-        authBtn.innerHTML = 'Authenticate with Google';
-    }
-}
+// Service account credentials don't need browser authentication
 
 function showGoogleHelp() {
     const helpDiv = document.getElementById('google-help');

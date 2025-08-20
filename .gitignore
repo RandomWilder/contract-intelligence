@@ -35,11 +35,15 @@ data/temp/
 data/chroma_db/
 data/chroma_builtin/
 
-# Google Credentials (Security) - FILES ONLY, NOT DIRECTORIES
+# Google Credentials and API Settings (Security) - FILES ONLY, NOT DIRECTORIES
 google_credentials.json
 **/google_credentials.json
+google_service_account.json
+**/google_service_account.json
 google_token.pickle
 **/google_token.pickle
+app_settings.json
+**/app_settings.json
 # Any pickle files in backend directory (tokens, sessions, etc.)
 electron-app/python-backend/*.pickle
 # But preserve directory structure for production

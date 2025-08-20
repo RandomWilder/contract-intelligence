@@ -1,3 +1,4 @@
 {
-  "google_credentials_path": "google_credentials.json"
+  "google_credentials_path": "google_service_account.json",
+  "openai_api_key": ""
 }

@@ -183,7 +183,7 @@
                 <label for="google-credentials">Google Credentials File:</label>
                 <input type="file" id="google-credentials" accept=".json">
                 <div class="help-text">
-                    Upload your Google OAuth2 credentials JSON file. 
+                    Upload your Google Service Account credentials JSON file. 
                     <a href="#" onclick="showGoogleHelp()">How to get this file?</a>
                 </div>
             </div>
@@ -192,9 +192,7 @@
                 Upload Credentials
             </button>
             
-            <button class="btn btn-success" onclick="authenticateGoogle()" id="google-auth-btn" disabled>
-                Authenticate with Google
-            </button>
+            <!-- Service account authentication doesn't require browser flow -->
             
             <div id="google-help" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
                 <h4>How to get Google credentials:</h4>
@@ -202,8 +200,8 @@
                     <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
                     <li>Create a new project or select an existing one</li>
                     <li>Enable these APIs: Vision API, Drive API, Gmail API</li>
-                    <li>Go to "Credentials" → "Create Credentials" → "OAuth client ID"</li>
-                    <li>Choose "Desktop application"</li>
+                    <li>Go to "Credentials" → "Create Credentials" → "Service Account"</li>
+                    <li>Create a service account and generate a key (JSON format)</li>
                     <li>Download the JSON file and upload it here</li>
                 </ol>
             </div>

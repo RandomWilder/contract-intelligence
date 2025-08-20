@@ -184,7 +184,7 @@ class ContractIntelligenceApp {
                             <div class="setup-help">
                                 <small>
                                     <a href="#" id="create-credentials-link">Create credentials</a> 
-                                    in Google Cloud Console (OAuth 2.0 Client ID, Desktop Application)
+                                    in Google Cloud Console (Service Account JSON key)
                                 </small>
                             </div>
                         </div>
@@ -383,7 +383,7 @@ class ContractIntelligenceApp {
         if (credsLink) {
             credsLink.addEventListener('click', (e) => {
                 e.preventDefault();
-                window.electronAPI.openExternal('https://console.cloud.google.com/apis/credentials');
+                window.electronAPI.openExternal('https://console.cloud.google.com/iam-admin/serviceaccounts');
             });
         }
         
@@ -441,7 +441,7 @@ class ContractIntelligenceApp {
         }
         
         if (!googlePath) {
-            this.showSetupStatus('error', 'Google credentials file is required for OCR functionality');
+            this.showSetupStatus('error', 'Google service account credentials file is required for OCR functionality');
             return;
         }
         
