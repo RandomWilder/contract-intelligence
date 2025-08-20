@@ -8,6 +8,25 @@ Uses only installed packages: FastAPI, OpenAI, ChromaDB, basic document processi
 # Detect PyInstaller environment
 import os
 import sys
+import importlib
+import traceback
+
+# Set up detailed logging for imports
+def try_import(module_name):
+    """Try to import a module and log the result"""
+    try:
+        module = importlib.import_module(module_name)
+        print(f"[SUCCESS] Successfully imported {module_name}")
+        return module
+    except ImportError as e:
+        print(f"[ERROR] Failed to import {module_name}: {e}")
+        print(f"[TRACE] {traceback.format_exc()}")
+        return None
+    except Exception as e:
+        print(f"[ERROR] Unexpected error importing {module_name}: {e}")
+        print(f"[TRACE] {traceback.format_exc()}")
+        return None
+
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # Running in PyInstaller bundle
     print("[INFO] Running in PyInstaller bundle")
@@ -146,7 +165,7 @@ except ImportError as e:
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "status": "limited",
-                    "version": "1.5.45",
+                    "version": "1.5.46",
                     "message": "Running in emergency mode - FastAPI unavailable"
                 }).encode())
 
@@ -280,6 +299,48 @@ def save_google_credentials(credentials_path):
         print(f"[ERROR] Failed to save Google credentials path: {e}")
         return False
 
+def trace_chromadb_dependencies():
+    """Trace ChromaDB dependencies and log their availability"""
+    print("\n[DIAGNOSTIC] Tracing ChromaDB dependencies...")
+    
+    # Core dependencies
+    try_import("chromadb")
+    
+    # ONNX related
+    try_import("onnx")
+    try_import("onnxruntime")
+    try_import("onnxruntime.capi.onnxruntime_pybind11_state")
+    
+    # Vector database dependencies
+    try_import("numpy")
+    try_import("protobuf")
+    
+    # Embedding related
+    try_import("openai")
+    try_import("tiktoken")
+    try_import("tokenizers")
+    try_import("sentence_transformers")
+    
+    # ChromaDB internal modules
+    try_import("chromadb.config")
+    try_import("chromadb.api")
+    try_import("chromadb.utils.embedding_functions")
+    
+    # Check Python environment
+    print(f"[INFO] Python version: {sys.version}")
+    print(f"[INFO] Python executable: {sys.executable}")
+    print(f"[INFO] sys.path: {sys.path}")
+    
+    # Check for PyInstaller environment
+    if getattr(sys, 'frozen', False):
+        print(f"[INFO] Running in PyInstaller bundle: {sys._MEIPASS}")
+        try:
+            print(f"[INFO] Bundle contents: {os.listdir(sys._MEIPASS)}")
+        except Exception as e:
+            print(f"[ERROR] Failed to list bundle contents: {e}")
+    
+    print("[DIAGNOSTIC] Dependency tracing complete\n")
+
 def initialize_services():
     """Initialize ChromaDB and OpenAI services with embedding function"""
     global chroma_client, collection, openai_client, contract_intelligence_engine
@@ -289,6 +350,9 @@ def initialize_services():
     collection = None
     openai_client = None
     contract_intelligence_engine = None
+    
+    # Trace dependencies before initialization
+    trace_chromadb_dependencies()
     
     try:
         # Load settings first
@@ -308,6 +372,10 @@ def initialize_services():
         # Initialize ChromaDB if available
         if AI_CHROMADB_AVAILABLE:
             try:
+                print("\n[DIAGNOSTIC] Starting ChromaDB initialization...")
+                print(f"[INFO] ChromaDB module details: {chromadb.__file__}")
+                print(f"[INFO] ChromaDB version: {getattr(chromadb, '__version__', 'unknown')}")
+                
                 # Initialize ChromaDB with PERSISTENT storage
                 # Use environment variable set in runtime hook for PyInstaller compatibility
                 if getattr(sys, 'frozen', False) and 'CHROMADB_DIR' in os.environ:
@@ -317,7 +385,25 @@ def initialize_services():
                     persist_dir = "./chroma_db"
                     print(f"[INFO] Using default ChromaDB directory: {persist_dir}")
                 
+                print(f"[INFO] Creating directory: {persist_dir}")
                 os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
+                print(f"[INFO] Directory exists: {os.path.exists(persist_dir)}")
+                print(f"[INFO] Directory contents: {os.listdir(persist_dir) if os.path.exists(persist_dir) else 'N/A'}")
+                
+                # Check if directory is writable
+                try:
+                    test_file = os.path.join(persist_dir, 'test_write.txt')
+                    with open(test_file, 'w') as f:
+                        f.write('test')
+                    os.remove(test_file)
+                    print(f"[INFO] Directory is writable: {persist_dir}")
+                except Exception as write_error:
+                    print(f"[ERROR] Directory is not writable: {persist_dir} - {write_error}")
+                    print(f"[TRACE] {traceback.format_exc()}")
+                    # Try to create a directory in a more accessible location
+                    persist_dir = os.path.join(os.path.expanduser('~'), '.contract_intelligence', 'chroma_db')
+                    print(f"[RECOVERY] Trying alternative directory: {persist_dir}")
+                    os.makedirs(persist_dir, exist_ok=True)
                 
                 # Create OpenAI embedding function FIRST - CRITICAL to prevent ONNX loading
                 api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
@@ -329,20 +415,50 @@ def initialize_services():
                 try:
                     # Create OpenAI embedding function before initializing ChromaDB
                     print("[INFO] Creating OpenAI ada-002 embedding function for ChromaDB initialization")
-                    from chromadb.utils import embedding_functions
-                    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-                        api_key=api_key,
-                        model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
-                    )
-                    print("[SUCCESS] OpenAI ada-002 embedding function created successfully")
                     
-                    # Initialize ChromaDB with the OpenAI embedding function
+                    # Import with detailed error handling
+                    try:
+                        from chromadb.utils import embedding_functions
+                        print("[SUCCESS] Imported chromadb.utils.embedding_functions")
+                    except ImportError as e:
+                        print(f"[ERROR] Failed to import embedding_functions: {e}")
+                        print(f"[TRACE] {traceback.format_exc()}")
+                        return
+                    
+                    # Create embedding function with detailed error handling
+                    try:
+                        openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                            api_key=api_key,
+                            model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
+                        )
+                        print("[SUCCESS] OpenAI ada-002 embedding function created successfully")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to create OpenAI embedding function: {e}")
+                        print(f"[TRACE] {traceback.format_exc()}")
+                        return
+                    
+                    # Initialize ChromaDB with detailed error handling
                     print("[INFO] Initializing ChromaDB with OpenAI embeddings (NO ONNX)")
-                    chroma_client = chromadb.PersistentClient(
-                        path=persist_dir,
-                        settings=Settings(anonymized_telemetry=False)
-                    )
-                    print(f"[SUCCESS] ChromaDB initialized with persistent storage at {persist_dir}")
+                    try:
+                        # Import Settings with detailed error handling
+                        try:
+                            from chromadb.config import Settings
+                            print("[SUCCESS] Imported chromadb.config.Settings")
+                        except ImportError as e:
+                            print(f"[ERROR] Failed to import Settings: {e}")
+                            print(f"[TRACE] {traceback.format_exc()}")
+                            return
+                        
+                        # Create client with detailed error handling
+                        chroma_client = chromadb.PersistentClient(
+                            path=persist_dir,
+                            settings=Settings(anonymized_telemetry=False)
+                        )
+                        print(f"[SUCCESS] ChromaDB initialized with persistent storage at {persist_dir}")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to initialize ChromaDB client: {e}")
+                        print(f"[TRACE] {traceback.format_exc()}")
+                        return
                 except Exception as chroma_error:
                     print(f"[ERROR] Failed to initialize ChromaDB client: {chroma_error}")
                     # Try with in-memory client as fallback, still using OpenAI embeddings
@@ -922,7 +1038,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.45",
+    version="1.5.46",
     lifespan=lifespan
 )
 
@@ -940,7 +1056,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.45",
+        "version": "1.5.46",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,
@@ -2005,7 +2121,7 @@ async def get_config():
     return {
         "openai_models": ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
         "supported_file_types": ["pdf", "docx", "txt", "jpg", "jpeg", "png"],
-        "version": "1.5.45",
+        "version": "1.5.46",
         "backend_type": "minimal"
     }
 
