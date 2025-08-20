@@ -146,7 +146,7 @@ except ImportError as e:
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "status": "limited",
-                    "version": "1.5.32",
+                    "version": "1.5.44",
                     "message": "Running in emergency mode - FastAPI unavailable"
                 }).encode())
 
@@ -319,7 +319,25 @@ def initialize_services():
                 
                 os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
                 
+                # Create OpenAI embedding function FIRST - CRITICAL to prevent ONNX loading
+                api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    print("[ERROR] OpenAI API key is required for ChromaDB - cannot initialize")
+                    chroma_client = None
+                    return
+                
                 try:
+                    # Create OpenAI embedding function before initializing ChromaDB
+                    print("[INFO] Creating OpenAI ada-002 embedding function for ChromaDB initialization")
+                    from chromadb.utils import embedding_functions
+                    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                        api_key=api_key,
+                        model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
+                    )
+                    print("[SUCCESS] OpenAI ada-002 embedding function created successfully")
+                    
+                    # Initialize ChromaDB with the OpenAI embedding function
+                    print("[INFO] Initializing ChromaDB with OpenAI embeddings (NO ONNX)")
                     chroma_client = chromadb.PersistentClient(
                         path=persist_dir,
                         settings=Settings(anonymized_telemetry=False)
@@ -327,9 +345,9 @@ def initialize_services():
                     print(f"[SUCCESS] ChromaDB initialized with persistent storage at {persist_dir}")
                 except Exception as chroma_error:
                     print(f"[ERROR] Failed to initialize ChromaDB client: {chroma_error}")
-                    # Try with in-memory client as fallback
+                    # Try with in-memory client as fallback, still using OpenAI embeddings
                     try:
-                        print("[RECOVERY] Attempting to use in-memory ChromaDB client")
+                        print("[RECOVERY] Attempting to use in-memory ChromaDB client with OpenAI embeddings")
                         chroma_client = chromadb.Client(Settings(anonymized_telemetry=False, is_persistent=False))
                         print("[SUCCESS] ChromaDB initialized with in-memory storage (fallback)")
                     except Exception as memory_error:
@@ -371,45 +389,28 @@ def initialize_services():
         else:
             print("[INFO] Contract Intelligence Engine not available")
             
-        # ONLY use OpenAI embeddings - NO default ChromaDB embeddings
-        if not api_key:
-            print("[WARNING] OpenAI API key is REQUIRED for ChromaDB embeddings. Backend will run but embeddings will not work until API key is configured.")
-            openai_ef = None
-        else:
-            try:
-                # Check for tokenizers which is required by ChromaDB's default embedding function
-                try:
-                    import tokenizers
-                    print("[INFO] Tokenizers library is available")
-                    TOKENIZERS_AVAILABLE = True
-                except ImportError:
-                    print("[WARNING] Tokenizers library not available - will use OpenAI embeddings only")
-                    TOKENIZERS_AVAILABLE = False
-                
-                try:
-                    import sentence_transformers
-                    print("[INFO] Sentence-transformers library is available")
-                    SENTENCE_TRANSFORMERS_AVAILABLE = True
-                except ImportError:
-                    print("[WARNING] Sentence-transformers library not available - will use OpenAI embeddings only")
-                    SENTENCE_TRANSFORMERS_AVAILABLE = False
-                
-                # Create OpenAI embedding function - ONLY use ada-002, no other models
-                print("[INFO] Creating OpenAI ada-002 embedding function")
-                from chromadb.utils import embedding_functions
-                openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-                    api_key=api_key,
-                    model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
-                )
-                logger.info("Using OpenAI ada-002 embeddings ONLY")
-                print("[SUCCESS] OpenAI ada-002 embedding function created successfully")
-            except Exception as e:
-                print(f"[ERROR] Failed to create embedding function: {e}")
-                print("[CRITICAL] ChromaDB will not function properly without embedding function")
-                openai_ef = None
+        # Check for tokenizers and sentence_transformers availability (for diagnostics only)
+        try:
+            import tokenizers
+            print("[INFO] Tokenizers library is available")
+            TOKENIZERS_AVAILABLE = True
+        except ImportError:
+            print("[WARNING] Tokenizers library not available")
+            TOKENIZERS_AVAILABLE = False
         
-        # Try to get existing collection first (only if we have embedding function)
-        if openai_ef is not None and chroma_client is not None:
+        try:
+            import sentence_transformers
+            print("[INFO] Sentence-transformers library is available")
+            SENTENCE_TRANSFORMERS_AVAILABLE = True
+        except ImportError:
+            print("[WARNING] Sentence-transformers library not available")
+            SENTENCE_TRANSFORMERS_AVAILABLE = False
+        
+        # openai_ef is now created during ChromaDB initialization
+        # This ensures we never use ONNX models even temporarily
+        
+        # Try to get existing collection first (only if we have ChromaDB client)
+        if chroma_client is not None:
             try:
                 print("[INFO] Attempting to get or create ChromaDB collection")
                 collection_name = "contracts_electron"
@@ -921,7 +922,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.43",
+    version="1.5.44",
     lifespan=lifespan
 )
 
@@ -939,7 +940,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.43",
+        "version": "1.5.44",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,
@@ -2004,7 +2005,7 @@ async def get_config():
     return {
         "openai_models": ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
         "supported_file_types": ["pdf", "docx", "txt", "jpg", "jpeg", "png"],
-        "version": "1.5.43",
+        "version": "1.5.44",
         "backend_type": "minimal"
     }
 
