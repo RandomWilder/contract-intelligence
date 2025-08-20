@@ -63,9 +63,28 @@ if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         logs_dir = os.path.join(home_dir, 'Library', 'Logs', 'Contract Intelligence')
         try:
             os.makedirs(logs_dir, exist_ok=True)
-            print(f"[INFO] Created logs directory: {logs_dir}")
+            # Test write permissions
+            test_file = os.path.join(logs_dir, 'test_write.txt')
+            try:
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                os.remove(test_file)
+                print(f"[INFO] Created logs directory with write permissions: {logs_dir}")
+            except Exception as write_error:
+                print(f"[WARNING] Logs directory exists but is not writable: {write_error}")
+                # Try fallback to temp directory
+                logs_dir = os.path.join(tempfile.gettempdir(), 'contract_intelligence_logs')
+                os.makedirs(logs_dir, exist_ok=True)
+                print(f"[INFO] Using temporary logs directory: {logs_dir}")
         except Exception as e:
             print(f"[WARNING] Failed to create logs directory: {e}")
+            # Try fallback to temp directory
+            logs_dir = os.path.join(tempfile.gettempdir(), 'contract_intelligence_logs')
+            os.makedirs(logs_dir, exist_ok=True)
+            print(f"[INFO] Using temporary logs directory: {logs_dir}")
+            
+        # Set environment variable for logs directory
+        os.environ['CI_LOGS_DIR'] = logs_dir
     
     # Ensure contract_intelligence.py is accessible
     contract_intelligence_path = os.path.join(bundle_dir, 'contract_intelligence.py')

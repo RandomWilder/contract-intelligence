@@ -166,7 +166,7 @@ except ImportError as e:
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "status": "limited",
-                    "version": "1.5.48",
+                    "version": "1.5.49",
                     "message": "Running in emergency mode - FastAPI unavailable"
                 }).encode())
 
@@ -303,7 +303,8 @@ def save_google_credentials(credentials_path):
 def try_import(module_name):
     """Try to import a module and log the result"""
     try:
-        module = __import__(module_name.split('.')[0])
+        # Use importlib.import_module which is more reliable across platforms
+        module = importlib.import_module(module_name.split('.')[0])
         if '.' in module_name:
             for part in module_name.split('.')[1:]:
                 module = getattr(module, part)
@@ -2443,25 +2444,29 @@ if __name__ == "__main__":
                     )
                 except Exception as e:
                     print(f"[ERROR] Server thread error: {e}")
+                    print(f"[TRACE] {traceback.format_exc()}")
             
             # Start server in a thread
             server_thread = threading.Thread(target=run_server)
             server_thread.daemon = True
             server_thread.start()
             
-            # Wait for server to initialize
+            # Wait for server to initialize - longer time for macOS
             print("[INFO] Test mode: Server starting, will exit after initialization...")
-            time.sleep(5)
+            wait_time = 8 if sys.platform == 'darwin' else 5
+            time.sleep(wait_time)
             
             # Try to access health endpoint
             try:
                 import urllib.request
-                response = urllib.request.urlopen(f"http://127.0.0.1:{port}/health")
+                # Add timeout to prevent hanging
+                response = urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=10)
                 print(f"[SUCCESS] Health check returned status: {response.status}")
                 print("[INFO] Test mode: Server initialized successfully, exiting...")
                 sys.exit(0)
             except Exception as e:
                 print(f"[ERROR] Health check failed: {e}")
+                print(f"[TRACE] {traceback.format_exc()}")
                 print("[INFO] Test mode: Server failed to initialize, exiting...")
                 sys.exit(1)
         else:
