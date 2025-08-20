@@ -34,38 +34,65 @@ class ContractIntelligenceApp {
         // Show loading overlay initially
         this.showLoadingOverlay('Starting backend services...');
         
-        // Add fallback check for backend readiness (especially when returning from settings)
+        // **IMPROVED: Only check backend readiness if returning from settings**
+        // Otherwise, wait for the main process to signal backend ready
         const urlParams = new URLSearchParams(window.location.search);
         const fromSettings = urlParams.get('from') === 'settings';
-        const checkDelay = fromSettings ? 500 : 2000; // Faster check if returning from settings
         
-        setTimeout(() => {
-            if (!this.isBackendReady) {
-                console.log(`⏰ Checking backend readiness (fallback${fromSettings ? ' - from settings' : ''})...`);
-                this.checkBackendReadiness();
-            }
-        }, checkDelay);
+        if (fromSettings) {
+            // Quick check when returning from settings (backend should already be running)
+            setTimeout(() => {
+                if (!this.isBackendReady) {
+                    console.log('⏰ Quick backend check (returning from settings)...');
+                    this.checkBackendReadiness();
+                }
+            }, 500);
+        } else {
+            // For fresh starts, be patient and wait for main process signal
+            console.log('⏳ Waiting for main process to signal backend ready...');
+            
+            // Only use fallback after a much longer delay (backend startup can take time)
+            setTimeout(() => {
+                if (!this.isBackendReady) {
+                    console.log('⏰ Fallback backend check after extended wait...');
+                    this.checkBackendReadiness();
+                }
+            }, 45000); // 45 seconds - give backend plenty of time
+        }
     }
 
     async checkBackendReadiness() {
         try {
+            console.log('🔍 Frontend checking backend readiness...');
+            
             // Try to ping the backend health endpoint
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+            
             const response = await fetch(`${this.backendUrl}/health`, { 
                 method: 'GET',
-                timeout: 5000 
+                signal: controller.signal
             });
             
+            clearTimeout(timeoutId);
+            
             if (response.ok) {
-                console.log('✅ Backend is ready (fallback check successful)');
+                const data = await response.json();
+                console.log('✅ Frontend confirmed: Backend is ready!', data);
                 this.isBackendReady = true;
                 this.hideLoadingOverlay();
                 this.checkAndHandleSetup();
             } else {
-                console.log('❌ Backend not ready yet (fallback check)');
+                console.log(`❌ Backend responded but not ready (status: ${response.status})`);
+                this.showLoadingOverlay('Backend starting up, please wait...');
             }
         } catch (error) {
-            console.log('❌ Backend not accessible (fallback check):', error.message);
-            // Continue waiting for the Electron event
+            if (error.name === 'AbortError') {
+                console.log('⏰ Backend health check timed out - still starting up...');
+            } else {
+                console.log('❌ Backend not accessible (frontend check):', error.message);
+            }
+            this.showLoadingOverlay('Waiting for backend services...');
         }
     }
 

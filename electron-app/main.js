@@ -131,7 +131,39 @@ function startPythonBackend() {
                     logDiagnostic(`Backend executable found!`);
                     logDiagnostic(`Size: ${stats.size} bytes`);
                     logDiagnostic(`Permissions: ${stats.mode.toString(8)}`);
-                    logDiagnostic(`Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
+                    
+                    // **FIX: Platform-specific executable check**
+                    let isExecutable = false;
+                    if (process.platform === 'win32') {
+                        // On Windows, check if file has .exe extension and can be accessed
+                        isExecutable = backendPath.toLowerCase().endsWith('.exe');
+                        try {
+                            // Additional check: try to access the file for execution
+                            fs.accessSync(backendPath, fs.constants.F_OK | fs.constants.R_OK);
+                            logDiagnostic(`Windows executable access check: PASSED`);
+                        } catch (accessError) {
+                            logDiagnostic(`Windows executable access check: FAILED - ${accessError.message}`);
+                            isExecutable = false;
+                        }
+                    } else {
+                        // Unix-like systems: check permission bits
+                        isExecutable = !!(stats.mode & parseInt('111', 8));
+                    }
+                    
+                    logDiagnostic(`Is executable: ${isExecutable}`);
+                    
+                    // **FIX: Windows-specific permission fix**
+                    if (process.platform === 'win32' && !isExecutable) {
+                        logDiagnostic(`ATTEMPTING WINDOWS PERMISSION FIX...`);
+                        try {
+                            // On Windows, try to set file attributes to ensure it's executable
+                            const { execSync } = require('child_process');
+                            execSync(`attrib -R "${backendPath}"`, { stdio: 'ignore' });
+                            logDiagnostic(`Windows permission fix applied successfully`);
+                        } catch (winFixError) {
+                            logDiagnostic(`Windows permission fix failed: ${winFixError.message}`);
+                        }
+                    }
                 } else {
                     logDiagnostic(`Backend executable NOT FOUND at: ${backendPath}`);
                     logDiagnostic(`THIS IS THE PROBLEM - BACKEND MISSING!`);
@@ -155,8 +187,8 @@ function startPythonBackend() {
             logDiagnostic(`=== END DIAGNOSTIC ===`);
         }
         
-        // **FIX #5: macOS executable permissions check**
-        if (!isDev && process.platform !== 'win32') {
+        // **FIX #5: Cross-platform executable permissions check**
+        if (!isDev) {
             const fs = require('fs');
             try {
                 // Check if executable exists
@@ -164,11 +196,25 @@ function startPythonBackend() {
                     throw new Error(`Backend executable not found at: ${backendPath}`);
                 }
                 
-                // Ensure executable permissions on macOS/Linux
-                const stats = fs.statSync(backendPath);
-                if (!(stats.mode & parseInt('111', 8))) {
-                    console.log('Setting executable permissions on backend...');
-                    fs.chmodSync(backendPath, stats.mode | parseInt('755', 8));
+                if (process.platform === 'win32') {
+                    // **WINDOWS FIX: Ensure file is not read-only and has proper attributes**
+                    console.log('Checking Windows executable attributes...');
+                    try {
+                        const { execSync } = require('child_process');
+                        // Remove read-only attribute if present
+                        execSync(`attrib -R "${backendPath}"`, { stdio: 'pipe' });
+                        console.log('Windows executable attributes verified');
+                    } catch (attrError) {
+                        console.warn('Windows attribute fix failed:', attrError.message);
+                        // Don't fail the whole process for this
+                    }
+                } else {
+                    // Ensure executable permissions on macOS/Linux
+                    const stats = fs.statSync(backendPath);
+                    if (!(stats.mode & parseInt('111', 8))) {
+                        console.log('Setting executable permissions on backend...');
+                        fs.chmodSync(backendPath, stats.mode | parseInt('755', 8));
+                    }
                 }
             } catch (error) {
                 console.error('Backend executable check failed:', error);
@@ -255,13 +301,26 @@ function startPythonBackend() {
                 mainWindow.webContents.executeJavaScript(`console.error("Error path: ${error.path || 'unknown'}");`);
             }
             
-            const errorMessage = process.platform === 'darwin'
-                ? `Failed to start Python backend: ${error.message}. This might be due to missing executable permissions or dependencies.`
-                : `Failed to start Python backend: ${error.message}. Please ensure the backend executable exists and has proper permissions.`;
+            // **ENHANCED: Platform-specific error messages**
+            let errorMessage;
+            if (process.platform === 'win32') {
+                if (error.code === 'EACCES' || error.code === 'EPERM') {
+                    errorMessage = `Failed to start Python backend: Permission denied. The executable may be blocked by Windows security or antivirus software. Try running the application as administrator or adding it to your antivirus exceptions.`;
+                } else if (error.code === 'ENOENT') {
+                    errorMessage = `Failed to start Python backend: Executable not found. The backend file may be missing or corrupted. Please reinstall the application.`;
+                } else {
+                    errorMessage = `Failed to start Python backend: ${error.message}. This might be due to Windows security restrictions or missing dependencies.`;
+                }
+            } else if (process.platform === 'darwin') {
+                errorMessage = `Failed to start Python backend: ${error.message}. This might be due to missing executable permissions or macOS security restrictions. Try right-clicking the app and selecting "Open" to bypass security warnings.`;
+            } else {
+                errorMessage = `Failed to start Python backend: ${error.message}. Please ensure the backend executable exists and has proper permissions.`;
+            }
+            
             showErrorDialog(errorMessage);
         });
 
-        // **FIX #8: Intelligent startup timing with process readiness detection**
+        // **IMPROVED: Reliable backend startup detection**
         let backendReadyDetected = false;
         let healthCheckStarted = false;
         
@@ -270,14 +329,14 @@ function startPythonBackend() {
             const output = data.toString();
             
             // Detect when Uvicorn is actually running and ready
-            if (output.includes('Uvicorn running on') && !backendReadyDetected) {
+            if ((output.includes('Uvicorn running on') || output.includes('Application startup complete')) && !backendReadyDetected) {
                 backendReadyDetected = true;
-                console.log('Backend process signals ready - starting health checks...');
+                console.log('✅ Backend process signals ready - starting health checks...');
                 
                 // Start health checks immediately when backend signals ready
                 if (!healthCheckStarted) {
                     healthCheckStarted = true;
-                    setTimeout(() => checkBackendHealth(), 1000); // Quick check after signal
+                    setTimeout(() => checkBackendHealth(), 2000); // Give it a moment to fully initialize
                 }
             }
         };
@@ -287,17 +346,23 @@ function startPythonBackend() {
             handleBackendOutput(data);
         });
         
-        // **OPTIMIZED: Signal-driven health checks - NO premature attempts**
-        // Only start health checks AFTER backend signals ready via "Uvicorn running on" message
-        
-        // **SAFETY NET: Only if we never get a ready signal after reasonable time**
+        // **IMPROVED: Start health checks proactively after reasonable delay**
+        // Don't wait only for stdout signals - they might be missed
         setTimeout(() => {
-            if (!backendReadyDetected && !healthCheckStarted) {
-                console.log('TIMEOUT: No ready signal after 30s - starting emergency health checks...');
+            if (!healthCheckStarted) {
+                console.log('⏰ Starting proactive health checks (no startup signal detected yet)...');
                 healthCheckStarted = true;
                 checkBackendHealth();
             }
-        }, 30000); // Much longer timeout - only for true emergencies
+        }, 8000); // Start checking after 8 seconds regardless
+        
+        // **SAFETY NET: Emergency health checks if nothing worked**
+        setTimeout(() => {
+            if (!backendReadyDetected && healthCheckStarted) {
+                console.log('🚨 Emergency health check - backend should be ready by now...');
+                checkBackendHealth();
+            }
+        }, 20000); // Emergency check after 20 seconds
 
     } catch (error) {
         console.error('Failed to start Python backend:', error);
@@ -312,29 +377,52 @@ function stopPythonBackend() {
     }
 }
 
-async function checkBackendHealth(retryCount = 0, maxRetries = 15) {
+async function checkBackendHealth(retryCount = 0, maxRetries = 20) {
     try {
-        const response = await axios.get(`${PYTHON_BACKEND_URL}/health`);
-        console.log('Backend is ready:', response.data);
+        console.log(`🔍 Health check attempt ${retryCount + 1}/${maxRetries}...`);
+        
+        const response = await axios.get(`${PYTHON_BACKEND_URL}/health`, {
+            timeout: 10000 // 10 second timeout
+        });
+        
+        console.log('✅ Backend is ready:', response.data);
         
         // Notify renderer that backend is ready
         if (mainWindow) {
             mainWindow.webContents.send('backend-ready', true);
+            // Also send to console for debugging
+            mainWindow.webContents.executeJavaScript(`console.log("✅ Main process confirmed: Backend is ready!")`);
         }
+        
     } catch (error) {
-        console.error('Backend not ready:', error.message);
+        const errorType = error.code || error.message;
+        console.log(`❌ Health check ${retryCount + 1} failed: ${errorType}`);
         
         // Progressive backoff with maximum retry limit
         if (retryCount < maxRetries) {
-            const delays = [2000, 3000, 5000, 8000, 12000]; // Progressive delays
+            // More aggressive initial retries, then slower
+            const delays = [1000, 2000, 3000, 4000, 5000, 8000, 12000]; 
             const delayIndex = Math.min(retryCount, delays.length - 1);
             const delay = delays[delayIndex];
             
-            console.log(`Retrying health check in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})...`);
+            console.log(`⏰ Retrying health check in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})...`);
+            
+            // Send progress update to renderer
+            if (mainWindow) {
+                const progress = Math.round((retryCount / maxRetries) * 100);
+                mainWindow.webContents.executeJavaScript(`console.log("⏳ Backend startup progress: ${progress}% (attempt ${retryCount + 1}/${maxRetries})")`);
+            }
+            
             setTimeout(() => checkBackendHealth(retryCount + 1, maxRetries), delay);
         } else {
-            console.error('Backend failed to start after maximum retries. Showing error to user.');
-            showErrorDialog('Backend services failed to start. Please check your API configuration and try restarting the application.');
+            console.error('❌ Backend failed to start after maximum retries. Showing error to user.');
+            
+            // Send final error to renderer
+            if (mainWindow) {
+                mainWindow.webContents.executeJavaScript(`console.error("❌ Backend startup failed after ${maxRetries} attempts")`);
+            }
+            
+            showErrorDialog('Backend services failed to start after multiple attempts. Please check your system permissions and try restarting the application.');
         }
     }
 }
