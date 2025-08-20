@@ -112,6 +112,14 @@ def debug_text_sample(text: str, label: str = "Text sample", max_chars: int = 20
         return f"[{label}]: {len(text)} chars total - [Mixed encoding content]"
 
 # Core imports
+# Global feature availability flags
+FASTAPI_AVAILABLE = False
+DOCUMENT_PROCESSING_AVAILABLE = False
+AI_CHROMADB_AVAILABLE = False
+CONTRACT_INTELLIGENCE_AVAILABLE = False
+TOKENIZERS_AVAILABLE = False
+SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 print("[DIAGNOSTIC] Testing FastAPI imports...")
 try:
     import uvicorn
@@ -352,6 +360,23 @@ def initialize_services():
             openai_ef = None
         else:
             try:
+                # Check for tokenizers which is required by ChromaDB's default embedding function
+                try:
+                    import tokenizers
+                    print("[INFO] Tokenizers library is available")
+                    TOKENIZERS_AVAILABLE = True
+                except ImportError:
+                    print("[WARNING] Tokenizers library not available - will use OpenAI embeddings only")
+                    TOKENIZERS_AVAILABLE = False
+                
+                try:
+                    import sentence_transformers
+                    print("[INFO] Sentence-transformers library is available")
+                    SENTENCE_TRANSFORMERS_AVAILABLE = True
+                except ImportError:
+                    print("[WARNING] Sentence-transformers library not available - will use OpenAI embeddings only")
+                    SENTENCE_TRANSFORMERS_AVAILABLE = False
+                
                 from chromadb.utils import embedding_functions
                 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
                     api_key=api_key,
@@ -876,14 +901,16 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.37",
+        "version": "1.5.38",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,
         "features_available": {
             "document_processing": DOCUMENT_PROCESSING_AVAILABLE,
             "vector_search": AI_CHROMADB_AVAILABLE,
-            "contract_intelligence": CONTRACT_INTELLIGENCE_AVAILABLE
+            "contract_intelligence": CONTRACT_INTELLIGENCE_AVAILABLE,
+            "tokenizers": TOKENIZERS_AVAILABLE,
+            "sentence_transformers": SENTENCE_TRANSFORMERS_AVAILABLE
         },
         "backend_mode": "full" if AI_CHROMADB_AVAILABLE and DOCUMENT_PROCESSING_AVAILABLE else "limited"
     }

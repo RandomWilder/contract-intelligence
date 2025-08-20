@@ -12,11 +12,19 @@ chromadb_imports = collect_submodules('chromadb')
 fastapi_imports = collect_submodules('fastapi')
 starlette_imports = collect_submodules('starlette')
 pydantic_imports = collect_submodules('pydantic')  # Required by FastAPI
+tokenizers_imports = collect_submodules('tokenizers')  # Required by ChromaDB's embedding function
+sentence_transformers_imports = collect_submodules('sentence_transformers')  # Often used with tokenizers
+
+# Collect binary dependencies
+from PyInstaller.utils.hooks import collect_dynamic_libs
+tokenizers_binaries = collect_dynamic_libs('tokenizers')
 
 # Collect data files
 openai_datas = collect_data_files('openai')
 chromadb_datas = collect_data_files('chromadb')
 tiktoken_datas = collect_data_files('tiktoken')
+tokenizers_datas = collect_data_files('tokenizers')
+sentence_transformers_datas = collect_data_files('sentence_transformers')
 
 # Add contract_intelligence.py as a data file
 contract_intelligence_file = [
@@ -30,7 +38,8 @@ a = Analysis(
     datas=[
         ('requirements.txt', '.'),
         ('contract_intelligence.py', '.'),  # Explicitly include contract_intelligence.py
-    ] + openai_datas + chromadb_datas + tiktoken_datas,
+    ] + openai_datas + chromadb_datas + tiktoken_datas + tokenizers_datas + sentence_transformers_datas,
+    binaries=tokenizers_binaries,
     hiddenimports=[
         # Standard library modules
         'tempfile', 'shutil', 'logging', 're', 'codecs', 'contextlib', 'pathlib', 'typing',
@@ -104,6 +113,18 @@ a = Analysis(
         'openai._legacy_response',
         'tiktoken',
         
+        # Tokenizers and embeddings
+        'tokenizers',
+        'tokenizers.processors',
+        'tokenizers.decoders',
+        'tokenizers.models',
+        'tokenizers.normalizers',
+        'tokenizers.pre_tokenizers',
+        'tokenizers.trainers',
+        'sentence_transformers',
+        'sentence_transformers.models',
+        'sentence_transformers.util',
+        
         # ChromaDB
         'chromadb',
         'chromadb.config',
@@ -172,7 +193,7 @@ a = Analysis(
         
         # JSON and serialization
         'json.decoder', 'json.encoder', 'marshal', 'pickle', 'copyreg'
-    ] + openai_imports + chromadb_imports + fastapi_imports + starlette_imports + pydantic_imports,
+    ] + openai_imports + chromadb_imports + fastapi_imports + starlette_imports + pydantic_imports + tokenizers_imports + sentence_transformers_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[

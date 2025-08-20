@@ -27,3 +27,7 @@ numpy==1.26.4
 keyring==25.2.1
 pandas==2.2.2
 tiktoken==0.7.0
+
+# Embeddings and tokenizers (required by ChromaDB)
+tokenizers==0.15.2
+sentence-transformers==2.6.1
