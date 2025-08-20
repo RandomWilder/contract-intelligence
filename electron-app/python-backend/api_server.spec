@@ -22,10 +22,16 @@ try:
 except ImportError:
     print("WARNING: onnxruntime not found, but will be installed during build")
 protobuf_imports = collect_submodules('protobuf')  # Required for ChromaDB's data serialization
+tiktoken_imports = collect_submodules('tiktoken')  # Required for OpenAI embeddings
 
 # Collect binary dependencies
 from PyInstaller.utils.hooks import collect_dynamic_libs
 tokenizers_binaries = collect_dynamic_libs('tokenizers')
+onnxruntime_binaries = []
+try:
+    onnxruntime_binaries = collect_dynamic_libs('onnxruntime')
+except ImportError:
+    print("WARNING: onnxruntime binaries not found, but will be installed during build")
 
 # Collect data files
 openai_datas = collect_data_files('openai')
@@ -50,7 +56,7 @@ contract_intelligence_file = [
 a = Analysis(
     ['api_server_minimal.py'],
     pathex=['.'],
-    binaries=tokenizers_binaries,
+    binaries=tokenizers_binaries + onnxruntime_binaries,
     datas=[
         ('requirements.txt', '.'),
         ('contract_intelligence.py', '.'),  # Explicitly include contract_intelligence.py
@@ -219,7 +225,7 @@ a = Analysis(
         'protobuf.message',
         'protobuf.reflection',
         'protobuf.json_format'
-    ] + openai_imports + chromadb_imports + fastapi_imports + starlette_imports + pydantic_imports + tokenizers_imports + sentence_transformers_imports + onnxruntime_imports + protobuf_imports,
+    ] + openai_imports + chromadb_imports + fastapi_imports + starlette_imports + pydantic_imports + tokenizers_imports + sentence_transformers_imports + onnxruntime_imports + protobuf_imports + tiktoken_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[

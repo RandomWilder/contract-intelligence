@@ -166,7 +166,7 @@ except ImportError as e:
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "status": "limited",
-                    "version": "1.5.47",
+                    "version": "1.5.48",
                     "message": "Running in emergency mode - FastAPI unavailable"
                 }).encode())
 
@@ -329,10 +329,14 @@ def trace_chromadb_dependencies():
     try_import("onnx")
     try_import("onnxruntime")
     try_import("onnxruntime.capi.onnxruntime_pybind11_state")
+    try_import("onnxruntime.capi")
     
     # Vector database dependencies
     try_import("numpy")
     try_import("protobuf")
+    try_import("protobuf.internal")
+    try_import("protobuf.descriptor")
+    try_import("protobuf.message")
     try_import("sqlite3")
     try_import("hnswlib")
     try_import("pysqlite3")
@@ -340,13 +344,20 @@ def trace_chromadb_dependencies():
     # Embedding related
     try_import("openai")
     try_import("tiktoken")
+    try_import("tiktoken.core")
+    try_import("tiktoken_ext")
     try_import("tokenizers")
     try_import("sentence_transformers")
+    try_import("sentence_transformers.models")
+    try_import("sentence_transformers.util")
     
     # ChromaDB internal modules
     try_import("chromadb.config")
     try_import("chromadb.api")
+    try_import("chromadb.api.models")
+    try_import("chromadb.api.types")
     try_import("chromadb.utils.embedding_functions")
+    try_import("chromadb.utils.embedding_functions.openai_embedding_function")
     
     # Check Python environment
     print(f"[INFO] Python version: {sys.version}")
@@ -403,38 +414,38 @@ def initialize_services():
     trace_chromadb_dependencies()
     
     try:
-        # Load settings first
+    # Load settings first
         try:
-            load_settings()
+    load_settings()
             print("[SUCCESS] Settings loaded successfully")
         except Exception as e:
             print(f"[WARNING] Failed to load settings: {e}")
             print("[RECOVERY] Using default settings")
         
         try:
-            load_google_credentials()
+    load_google_credentials()
             print("[SUCCESS] Google credentials loaded (if available)")
         except Exception as e:
             print(f"[WARNING] Failed to load Google credentials: {e}")
-        
+    
         # Initialize ChromaDB if available
         if AI_CHROMADB_AVAILABLE:
-            try:
+    try:
                 print("\n[DIAGNOSTIC] Starting ChromaDB initialization...")
                 print(f"[INFO] ChromaDB module details: {chromadb.__file__}")
                 print(f"[INFO] ChromaDB version: {getattr(chromadb, '__version__', 'unknown')}")
                 
-                # Initialize ChromaDB with PERSISTENT storage
+        # Initialize ChromaDB with PERSISTENT storage
                 # Use environment variable set in runtime hook for PyInstaller compatibility
                 if getattr(sys, 'frozen', False) and 'CHROMADB_DIR' in os.environ:
                     persist_dir = os.environ['CHROMADB_DIR']
                     print(f"[INFO] Using PyInstaller ChromaDB directory: {persist_dir}")
                 else:
-                    persist_dir = "./chroma_db"
+        persist_dir = "./chroma_db"
                     print(f"[INFO] Using default ChromaDB directory: {persist_dir}")
                 
                 print(f"[INFO] Creating directory: {persist_dir}")
-                os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
+        os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
                 print(f"[INFO] Directory exists: {os.path.exists(persist_dir)}")
                 print(f"[INFO] Directory contents: {os.listdir(persist_dir) if os.path.exists(persist_dir) else 'N/A'}")
                 
@@ -498,10 +509,10 @@ def initialize_services():
                             return
                         
                         # Create client with detailed error handling
-                        chroma_client = chromadb.PersistentClient(
-                            path=persist_dir,
-                            settings=Settings(anonymized_telemetry=False)
-                        )
+        chroma_client = chromadb.PersistentClient(
+            path=persist_dir,
+            settings=Settings(anonymized_telemetry=False)
+        )
                         print(f"[SUCCESS] ChromaDB initialized with persistent storage at {persist_dir}")
                     except Exception as e:
                         print(f"[ERROR] Failed to initialize ChromaDB client: {e}")
@@ -527,12 +538,12 @@ def initialize_services():
         
         # Initialize OpenAI if available
         try:
-            # Initialize OpenAI (from settings or environment)
-            api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
-            if api_key:
+        # Initialize OpenAI (from settings or environment)
+        api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
+        if api_key:
                 if 'openai' in sys.modules and hasattr(openai, 'OpenAI'):
-                    openai_client = openai.OpenAI(api_key=api_key)
-                    print("[SUCCESS] OpenAI client initialized")
+            openai_client = openai.OpenAI(api_key=api_key)
+            print("[SUCCESS] OpenAI client initialized")
                 else:
                     print("[WARNING] OpenAI module not available")
                     openai_client = DummyOpenAI(api_key=api_key)
@@ -544,15 +555,15 @@ def initialize_services():
         
         # Initialize Contract Intelligence Engine if available
         if CONTRACT_INTELLIGENCE_AVAILABLE and openai_client:
-            try:
-                contract_intelligence_engine = ContractIntelligenceEngine(openai_client)
-                print("[SUCCESS] Contract Intelligence Engine initialized")
-            except Exception as e:
-                print(f"[WARNING] Failed to initialize Contract Intelligence Engine: {e}")
-                contract_intelligence_engine = None
-        else:
-            print("[INFO] Contract Intelligence Engine not available")
-            
+                try:
+                    contract_intelligence_engine = ContractIntelligenceEngine(openai_client)
+                    print("[SUCCESS] Contract Intelligence Engine initialized")
+                except Exception as e:
+                    print(f"[WARNING] Failed to initialize Contract Intelligence Engine: {e}")
+                    contract_intelligence_engine = None
+            else:
+                print("[INFO] Contract Intelligence Engine not available")
+                
         # Check for tokenizers and sentence_transformers availability (for diagnostics only)
         try:
             import tokenizers
@@ -582,42 +593,42 @@ def initialize_services():
                 # First try to get existing collection
                 try:
                     print(f"[INFO] Looking for existing collection '{collection_name}'")
-                    collection = chroma_client.get_collection(
+                collection = chroma_client.get_collection(
                         name=collection_name,
-                        embedding_function=openai_ef
-                    )
+                    embedding_function=openai_ef
+                )
                     print("[SUCCESS] Retrieved existing collection with ada-002 embeddings")
-                    
-                    # Verify collection has documents
-                    existing_docs = collection.count()
+                
+                # Verify collection has documents
+                existing_docs = collection.count()
                     print(f"[INFO] Found {existing_docs} existing document chunks in ChromaDB")
-                    
-                except Exception as get_error:
+                
+            except Exception as get_error:
                     print(f"[INFO] Collection doesn't exist or needs recreation: {get_error}")
                     
-                    # Collection doesn't exist, create it
-                    try:
+                # Collection doesn't exist, create it
+                try:
                         print(f"[INFO] Creating new collection '{collection_name}'")
-                        collection = chroma_client.create_collection(
+                    collection = chroma_client.create_collection(
                             name=collection_name,
-                            embedding_function=openai_ef,
-                            metadata={
-                                "description": "Contract documents for Electron app",
-                                "embedding_model": "text-embedding-ada-002"
-                            }
-                        )
+                        embedding_function=openai_ef,
+                        metadata={
+                            "description": "Contract documents for Electron app",
+                            "embedding_model": "text-embedding-ada-002"
+                        }
+                    )
                         print("[SUCCESS] Created new collection with ada-002 embeddings")
-                    except Exception as create_error:
+                except Exception as create_error:
                         print(f"[ERROR] Failed to create collection: {create_error}")
-                        # Don't raise - allow backend to start without collection
+                    # Don't raise - allow backend to start without collection
                         collection = None
             except Exception as collection_error:
                 print(f"[ERROR] ChromaDB collection setup failed: {collection_error}")
-                collection = None
+                    collection = None
         else:
             print("[INFO] Skipping ChromaDB collection setup - no OpenAI API key or ChromaDB client available")
             collection = None
-            
+        
         # Final status check
         if collection is not None:
             print("[SUCCESS] ChromaDB collection setup complete and ready for use")
@@ -625,7 +636,7 @@ def initialize_services():
             print("[WARNING] ChromaDB collection not available - vector search will be disabled")
         
         print("[SUCCESS] Services initialized successfully")
-        
+            
     except Exception as e:
         print(f"[ERROR] Failed to initialize services: {e}")
         # Don't raise - allow backend to continue running
@@ -2336,12 +2347,12 @@ async def upload_google_credentials(file: UploadFile = File(...)):
             
             # Save the path to settings
             save_google_credentials(credentials_path)
-            
-            return {
-                "success": True,
+        
+        return {
+            "success": True,
                 "message": "Google service account credentials verified and activated",
                 "services": ["OCR", "Drive", "Gmail"]
-            }
+        }
         except Exception as cred_error:
             # Clean up the file if validation fails
             if os.path.exists(credentials_path):
@@ -2363,8 +2374,8 @@ async def get_google_auth_status():
     
     if google_credentials:
         # Service account credentials don't expire like OAuth tokens
-        status = "authenticated"
-        services = ["OCR", "Drive", "Gmail"]
+            status = "authenticated"
+            services = ["OCR", "Drive", "Gmail"]
     
     return {
         "status": status,
@@ -2463,16 +2474,16 @@ if __name__ == "__main__":
     # Normal operation mode - run server continuously
     # Run server with error handling
     if FASTAPI_AVAILABLE:
-        try:
+    try:
             print("[INFO] Starting FastAPI server...")
-            uvicorn.run(
-                app,
-                host="127.0.0.1",
-                port=port,
-                log_level="info",
-                access_log=False
-            )
-        except Exception as e:
+        uvicorn.run(
+            app,
+            host="127.0.0.1",
+            port=port,
+            log_level="info",
+            access_log=False
+        )
+    except Exception as e:
             print(f"[ERROR] Failed to start FastAPI server: {e}")
             print("[RECOVERY] Attempting to start minimal HTTP server...")
             try:
@@ -2494,5 +2505,5 @@ if __name__ == "__main__":
                 httpd.serve_forever()
         except Exception as e:
             print(f"[CRITICAL] Failed to start minimal HTTP server: {e}")
-            exit(1)
+        exit(1)
 
