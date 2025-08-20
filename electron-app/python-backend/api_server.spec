@@ -34,12 +34,11 @@ contract_intelligence_file = [
 a = Analysis(
     ['api_server_minimal.py'],
     pathex=['.'],
-    binaries=[],
+    binaries=tokenizers_binaries,
     datas=[
         ('requirements.txt', '.'),
         ('contract_intelligence.py', '.'),  # Explicitly include contract_intelligence.py
     ] + openai_datas + chromadb_datas + tiktoken_datas + tokenizers_datas + sentence_transformers_datas,
-    binaries=tokenizers_binaries,
     hiddenimports=[
         # Standard library modules
         'tempfile', 'shutil', 'logging', 're', 'codecs', 'contextlib', 'pathlib', 'typing',
