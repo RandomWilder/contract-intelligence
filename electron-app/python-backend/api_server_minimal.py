@@ -245,81 +245,86 @@ def initialize_services():
     openai_client = None
     contract_intelligence_engine = None
     
-    # Load settings first
     try:
-        load_settings()
-        print("[SUCCESS] Settings loaded successfully")
-    except Exception as e:
-        print(f"[WARNING] Failed to load settings: {e}")
-        print("[RECOVERY] Using default settings")
-    
-    try:
-        load_google_credentials()
-        print("[SUCCESS] Google credentials loaded (if available)")
-    except Exception as e:
-        print(f"[WARNING] Failed to load Google credentials: {e}")
-    
-    # Initialize ChromaDB if available
-    if AI_CHROMADB_AVAILABLE:
+        # Load settings first
         try:
-            # Initialize ChromaDB with PERSISTENT storage
-            persist_dir = "./chroma_db"
-            os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
-            
-            chroma_client = chromadb.PersistentClient(
-                path=persist_dir,
-                settings=Settings(anonymized_telemetry=False)
-            )
-            print("[SUCCESS] ChromaDB initialized with persistent storage")
+            load_settings()
+            print("[SUCCESS] Settings loaded successfully")
         except Exception as e:
-            print(f"[WARNING] Failed to initialize ChromaDB: {e}")
-            print("[RECOVERY] Vector search functionality will be limited")
-            chroma_client = None
-    else:
-        print("[INFO] ChromaDB not available - vector search disabled")
-    
-    # Initialize OpenAI if available
-    try:
-        # Initialize OpenAI (from settings or environment)
-        api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
-        if api_key:
-            if 'openai' in sys.modules and hasattr(openai, 'OpenAI'):
-                openai_client = openai.OpenAI(api_key=api_key)
-                print("[SUCCESS] OpenAI client initialized")
-            else:
-                print("[WARNING] OpenAI module not available")
-                openai_client = DummyOpenAI(api_key=api_key)
-                print("[RECOVERY] Using dummy OpenAI client")
-        else:
-            print("[WARNING] No OpenAI API key found - please configure in settings")
-    except Exception as e:
-        print(f"[WARNING] Failed to initialize OpenAI client: {e}")
-    
-    # Initialize Contract Intelligence Engine if available
-    if CONTRACT_INTELLIGENCE_AVAILABLE and openai_client:
-        try:
-            contract_intelligence_engine = ContractIntelligenceEngine(openai_client)
-            print("[SUCCESS] Contract Intelligence Engine initialized")
-        except Exception as e:
-            print(f"[WARNING] Failed to initialize Contract Intelligence Engine: {e}")
-            contract_intelligence_engine = None
-    else:
-        print("[INFO] Contract Intelligence Engine not available")
+            print(f"[WARNING] Failed to load settings: {e}")
+            print("[RECOVERY] Using default settings")
         
+        try:
+            load_google_credentials()
+            print("[SUCCESS] Google credentials loaded (if available)")
+        except Exception as e:
+            print(f"[WARNING] Failed to load Google credentials: {e}")
+        
+        # Initialize ChromaDB if available
+        if AI_CHROMADB_AVAILABLE:
+            try:
+                # Initialize ChromaDB with PERSISTENT storage
+                persist_dir = "./chroma_db"
+                os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
+                
+                chroma_client = chromadb.PersistentClient(
+                    path=persist_dir,
+                    settings=Settings(anonymized_telemetry=False)
+                )
+                print("[SUCCESS] ChromaDB initialized with persistent storage")
+            except Exception as e:
+                print(f"[WARNING] Failed to initialize ChromaDB: {e}")
+                print("[RECOVERY] Vector search functionality will be limited")
+                chroma_client = None
+        else:
+            print("[INFO] ChromaDB not available - vector search disabled")
+        
+        # Initialize OpenAI if available
+        try:
+            # Initialize OpenAI (from settings or environment)
+            api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
+            if api_key:
+                if 'openai' in sys.modules and hasattr(openai, 'OpenAI'):
+                    openai_client = openai.OpenAI(api_key=api_key)
+                    print("[SUCCESS] OpenAI client initialized")
+                else:
+                    print("[WARNING] OpenAI module not available")
+                    openai_client = DummyOpenAI(api_key=api_key)
+                    print("[RECOVERY] Using dummy OpenAI client")
+            else:
+                print("[WARNING] No OpenAI API key found - please configure in settings")
+        except Exception as e:
+            print(f"[WARNING] Failed to initialize OpenAI client: {e}")
+        
+        # Initialize Contract Intelligence Engine if available
+        if CONTRACT_INTELLIGENCE_AVAILABLE and openai_client:
+            try:
+                contract_intelligence_engine = ContractIntelligenceEngine(openai_client)
+                print("[SUCCESS] Contract Intelligence Engine initialized")
+            except Exception as e:
+                print(f"[WARNING] Failed to initialize Contract Intelligence Engine: {e}")
+                contract_intelligence_engine = None
+        else:
+            print("[INFO] Contract Intelligence Engine not available")
+            
         # ONLY use OpenAI embeddings - NO default ChromaDB embeddings
         if not api_key:
             print("[WARNING] OpenAI API key is REQUIRED for ChromaDB embeddings. Backend will run but embeddings will not work until API key is configured.")
             openai_ef = None
         else:
-            from chromadb.utils import embedding_functions
-            openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-                api_key=api_key,
-                model_name="text-embedding-ada-002"
-            )
-            logger.info("Using OpenAI ada-002 embeddings ONLY")
+            try:
+                from chromadb.utils import embedding_functions
+                openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=api_key,
+                    model_name="text-embedding-ada-002"
+                )
+                logger.info("Using OpenAI ada-002 embeddings ONLY")
+            except Exception as e:
+                print(f"[WARNING] Failed to create embedding function: {e}")
+                openai_ef = None
         
         # Try to get existing collection first (only if we have embedding function)
-        if openai_ef is not None:
+        if openai_ef is not None and chroma_client is not None:
             try:
                 collection = chroma_client.get_collection(
                     name="contracts_electron",
@@ -349,10 +354,10 @@ def initialize_services():
                     # Don't raise - allow backend to start without collection
                     collection = None
         else:
-            print("[INFO] Skipping ChromaDB collection setup - no OpenAI API key configured")
+            print("[INFO] Skipping ChromaDB collection setup - no OpenAI API key or ChromaDB client available")
             collection = None
         
-        print("[SUCCESS] ChromaDB initialized successfully")
+        print("[SUCCESS] Services initialized successfully")
         
     except Exception as e:
         print(f"[ERROR] Failed to initialize services: {e}")
@@ -832,7 +837,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.32",
+        "version": "1.5.35",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,

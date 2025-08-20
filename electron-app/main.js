@@ -433,6 +433,11 @@ function showErrorDialog(message) {
 
 // App event listeners
 console.log('=== ELECTRON APP STARTING ===');
+
+// Set custom cache directory to prevent permission issues
+app.commandLine.appendSwitch('disk-cache-dir', path.join(app.getPath('userData'), 'Cache'));
+app.commandLine.appendSwitch('disable-http-cache', 'true');
+
 app.whenReady().then(() => {
     console.log('=== ELECTRON APP READY ===');
     createWindow();
