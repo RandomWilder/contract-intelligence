@@ -5,15 +5,22 @@ Minimal FastAPI backend for Contract Intelligence Platform
 Uses only installed packages: FastAPI, OpenAI, ChromaDB, basic document processing
 """
 
-import os
-import sys
-import json
-import tempfile
-import shutil
-import logging
-import re
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+# **DIAGNOSTIC: Test critical imports early to catch missing dependencies**
+print("[DIAGNOSTIC] Testing critical imports...")
+try:
+    import os
+    import sys
+    import json
+    import tempfile
+    import shutil
+    import logging
+    import re
+    from pathlib import Path
+    from typing import List, Dict, Any, Optional
+    print("[DIAGNOSTIC] ✅ Standard library imports successful")
+except ImportError as e:
+    print(f"[DIAGNOSTIC] ❌ Standard library import failed: {e}")
+    sys.exit(1)
 
 # Configure logging to stderr so it appears in Electron terminal
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
@@ -61,21 +68,39 @@ def debug_text_sample(text: str, label: str = "Text sample", max_chars: int = 20
         return f"[{label}]: {len(text)} chars total - [Mixed encoding content]"
 
 # Core imports
-import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+print("[DIAGNOSTIC] Testing FastAPI imports...")
+try:
+    import uvicorn
+    from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+    print("[DIAGNOSTIC] ✅ FastAPI imports successful")
+except ImportError as e:
+    print(f"[DIAGNOSTIC] ❌ FastAPI import failed: {e}")
+    sys.exit(1)
 
 # Document processing
-import PyPDF2
-import docx
-from PIL import Image
-import fitz  # PyMuPDF for PDF to image conversion
+print("[DIAGNOSTIC] Testing document processing imports...")
+try:
+    import PyPDF2
+    import docx
+    from PIL import Image
+    import fitz  # PyMuPDF for PDF to image conversion
+    print("[DIAGNOSTIC] ✅ Document processing imports successful")
+except ImportError as e:
+    print(f"[DIAGNOSTIC] ❌ Document processing import failed: {e}")
+    sys.exit(1)
 
 # AI and vector database
-import openai
-import chromadb
-from chromadb.config import Settings
+print("[DIAGNOSTIC] Testing AI/ChromaDB imports...")
+try:
+    import openai
+    import chromadb
+    from chromadb.config import Settings
+    print("[DIAGNOSTIC] ✅ AI/ChromaDB imports successful")
+except ImportError as e:
+    print(f"[DIAGNOSTIC] ❌ AI/ChromaDB import failed: {e}")
+    sys.exit(1)
 
 # Contract Intelligence Engine
 try:
@@ -719,7 +744,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.24",
+    version="1.5.25",
     lifespan=lifespan
 )
 

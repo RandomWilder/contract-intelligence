@@ -79,6 +79,19 @@ jobs:
                   ('python-backend/requirements.txt', '.'),
               ],
               hiddenimports=[
+                  # Standard library modules
+                  'tempfile',
+                  'shutil',
+                  'logging',
+                  're',
+                  'codecs',
+                  'contextlib',
+                  'pathlib',
+                  'typing',
+                  'sqlite3',
+                  'pickle',
+                  'json',
+                  # FastAPI and Uvicorn
                   'uvicorn',
                   'uvicorn.lifespan',
                   'uvicorn.lifespan.on',
@@ -101,7 +114,10 @@ jobs:
                   'starlette.routing',
                   'starlette.middleware',
                   'starlette.middleware.cors',
+                  # AI and ML
                   'openai',
+                  'tiktoken',
+                  # ChromaDB
                   'chromadb',
                   'chromadb.config',
                   'chromadb.api',
@@ -109,6 +125,7 @@ jobs:
                   'chromadb.utils',
                   'chromadb.utils.embedding_functions',
                   'chromadb.utils.embedding_functions.openai_embedding_function',
+                  # Google Cloud and Auth
                   'google.auth',
                   'google.auth.transport',
                   'google.auth.transport.requests',
@@ -117,19 +134,22 @@ jobs:
                   'google.oauth2.credentials',
                   'google.cloud',
                   'google.cloud.vision',
+                  'requests',
+                  'requests.auth',
+                  'requests.adapters',
+                  # Document processing
                   'PIL',
                   'PIL.Image',
                   'PyPDF2',
                   'docx',
+                  'fitz',
+                  # Data processing
                   'pandas',
                   'numpy',
-                  'tiktoken',
-                  'fitz',
+                  # Environment and config
                   'dotenv',
-                  'contract_intelligence',
-                  'sqlite3',
-                  'pickle',
-                  'json'
+                  # Custom modules
+                  'contract_intelligence'
               ],
               hookspath=[],
               hooksconfig={},

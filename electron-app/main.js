@@ -162,7 +162,20 @@ function startPythonBackend() {
         // Note: stdout handling moved to startup timing section above
 
         pythonProcess.stderr.on('data', (data) => {
-            console.error(`Python Backend Error: ${data}`);
+            const output = data.toString();
+            console.error(`Python Backend Error: ${output}`);
+            
+            // **ENHANCED: Capture specific import errors**
+            if (output.includes('ModuleNotFoundError') || output.includes('ImportError')) {
+                console.error(`🚨 IMPORT ERROR DETECTED: ${output}`);
+            }
+            if (output.includes('No module named')) {
+                console.error(`🚨 MISSING MODULE: ${output}`);
+            }
+            if (output.includes('Traceback')) {
+                console.error(`🚨 PYTHON TRACEBACK: ${output}`);
+            }
+            
             handleBackendOutput(data); // Also check stderr for readiness signals
         });
 
