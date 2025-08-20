@@ -280,13 +280,16 @@ jobs:
           if [ "${{ matrix.platform }}" = "win" ]; then
             [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not found"; exit 1; }
             cp pyinstaller-dist/api_server.exe resources/
-            echo "✅ Windows executable copied to resources/api_server.exe"
+            # **CRITICAL FIX: Set executable permissions on Windows**
+            chmod +x resources/api_server.exe
+            echo "✅ Windows executable copied to resources/api_server.exe with executable permissions"
             ls -la resources/api_server.exe
           else
             [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server not found"; exit 1; }
             cp pyinstaller-dist/api_server resources/
+            # **CRITICAL FIX: Set executable permissions on macOS**
             chmod +x resources/api_server
-            echo "✅ macOS executable copied to resources/api_server"
+            echo "✅ macOS executable copied to resources/api_server with executable permissions"
             ls -la resources/api_server
           fi
 

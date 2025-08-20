@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API",
     description="Backend API for Contract Intelligence Desktop App",
-    version="1.5.29",
+    version="1.5.30",
     lifespan=lifespan
 )
 
