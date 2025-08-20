@@ -5,6 +5,45 @@ Minimal FastAPI backend for Contract Intelligence Platform
 Uses only installed packages: FastAPI, OpenAI, ChromaDB, basic document processing
 """
 
+# Detect PyInstaller environment
+import os
+import sys
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Running in PyInstaller bundle
+    print("[INFO] Running in PyInstaller bundle")
+    bundle_dir = sys._MEIPASS
+    
+    # Add bundle directory to path
+    if bundle_dir not in sys.path:
+        sys.path.insert(0, bundle_dir)
+    
+    # Print bundle directory contents for debugging
+    print(f"[DEBUG] Bundle directory: {bundle_dir}")
+    try:
+        print(f"[DEBUG] Bundle contents: {os.listdir(bundle_dir)}")
+        
+        # Ensure contract_intelligence.py is accessible
+        contract_intelligence_path = os.path.join(bundle_dir, 'contract_intelligence.py')
+        if os.path.exists(contract_intelligence_path):
+            print(f"[INFO] Found contract_intelligence.py at: {contract_intelligence_path}")
+            
+            # Create a module spec and import the module
+            try:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location('contract_intelligence', contract_intelligence_path)
+                contract_intelligence_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(contract_intelligence_module)
+                sys.modules['contract_intelligence'] = contract_intelligence_module
+                print("[SUCCESS] Successfully loaded contract_intelligence module")
+            except Exception as e:
+                print(f"[ERROR] Failed to import contract_intelligence module: {e}")
+        else:
+            print(f"[ERROR] contract_intelligence.py not found at: {contract_intelligence_path}")
+    except Exception as e:
+        print(f"[ERROR] Failed to list bundle contents: {e}")
+else:
+    print("[INFO] Running in normal Python environment")
+
 # **DIAGNOSTIC: Test critical imports early to catch missing dependencies**
 print("[DIAGNOSTIC] Testing critical imports...")
 try:
@@ -837,7 +876,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.35",
+        "version": "1.5.36",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,
