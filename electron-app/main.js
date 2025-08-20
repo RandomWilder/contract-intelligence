@@ -438,6 +438,59 @@ console.log('=== ELECTRON APP STARTING ===');
 app.commandLine.appendSwitch('disk-cache-dir', path.join(app.getPath('userData'), 'Cache'));
 app.commandLine.appendSwitch('disable-http-cache', 'true');
 
+// Setup logging directory for macOS
+if (process.platform === 'darwin') {
+    const fs = require('fs');
+    const logDir = path.join(app.getPath('home'), 'Library', 'Logs', 'Contract Intelligence');
+    
+    // Ensure log directory exists
+    if (!fs.existsSync(logDir)) {
+        try {
+            fs.mkdirSync(logDir, { recursive: true });
+            console.log(`Created log directory: ${logDir}`);
+        } catch (err) {
+            console.error(`Failed to create log directory: ${err.message}`);
+        }
+    }
+    
+    // Redirect logs to file
+    const logPath = path.join(logDir, 'main.log');
+    console.log(`Setting up logging to: ${logPath}`);
+    
+    // Create a write stream for logs
+    try {
+        const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+        
+        // Store original console methods
+        const originalConsoleLog = console.log;
+        const originalConsoleError = console.error;
+        const originalConsoleWarn = console.warn;
+        
+        // Override console methods to write to file
+        console.log = function() {
+            const message = Array.from(arguments).join(' ');
+            logStream.write(`[LOG] ${new Date().toISOString()}: ${message}\n`);
+            originalConsoleLog.apply(console, arguments);
+        };
+        
+        console.error = function() {
+            const message = Array.from(arguments).join(' ');
+            logStream.write(`[ERROR] ${new Date().toISOString()}: ${message}\n`);
+            originalConsoleError.apply(console, arguments);
+        };
+        
+        console.warn = function() {
+            const message = Array.from(arguments).join(' ');
+            logStream.write(`[WARN] ${new Date().toISOString()}: ${message}\n`);
+            originalConsoleWarn.apply(console, arguments);
+        };
+        
+        console.log('Logging system initialized successfully');
+    } catch (err) {
+        console.error(`Failed to set up logging: ${err.message}`);
+    }
+}
+
 app.whenReady().then(() => {
     console.log('=== ELECTRON APP READY ===');
     createWindow();

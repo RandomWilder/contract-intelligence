@@ -10,6 +10,7 @@ import os
 import sys
 import importlib
 import traceback
+import platform
 
 # Set up detailed logging for imports
 def try_import(module_name):
@@ -165,7 +166,7 @@ except ImportError as e:
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     "status": "limited",
-                    "version": "1.5.46",
+                    "version": "1.5.47",
                     "message": "Running in emergency mode - FastAPI unavailable"
                 }).encode())
 
@@ -299,6 +300,24 @@ def save_google_credentials(credentials_path):
         print(f"[ERROR] Failed to save Google credentials path: {e}")
         return False
 
+def try_import(module_name):
+    """Try to import a module and log the result"""
+    try:
+        module = __import__(module_name.split('.')[0])
+        if '.' in module_name:
+            for part in module_name.split('.')[1:]:
+                module = getattr(module, part)
+        print(f"[SUCCESS] Successfully imported {module_name}")
+        print(f"[INFO] Module path: {getattr(module, '__file__', 'unknown')}")
+        print(f"[INFO] Module version: {getattr(module, '__version__', 'unknown')}")
+        return True
+    except ImportError as e:
+        print(f"[ERROR] Failed to import {module_name}: {e}")
+        return False
+    except Exception as e:
+        print(f"[ERROR] Unexpected error importing {module_name}: {e}")
+        return False
+
 def trace_chromadb_dependencies():
     """Trace ChromaDB dependencies and log their availability"""
     print("\n[DIAGNOSTIC] Tracing ChromaDB dependencies...")
@@ -314,6 +333,9 @@ def trace_chromadb_dependencies():
     # Vector database dependencies
     try_import("numpy")
     try_import("protobuf")
+    try_import("sqlite3")
+    try_import("hnswlib")
+    try_import("pysqlite3")
     
     # Embedding related
     try_import("openai")
@@ -338,6 +360,32 @@ def trace_chromadb_dependencies():
             print(f"[INFO] Bundle contents: {os.listdir(sys._MEIPASS)}")
         except Exception as e:
             print(f"[ERROR] Failed to list bundle contents: {e}")
+            
+    # Log system information for macOS
+    if sys.platform == 'darwin':
+        print(f"[INFO] macOS platform: {sys.platform}")
+        print(f"[INFO] macOS version: {platform.mac_ver()}")
+        
+        # Check common macOS directories
+        home_dir = os.path.expanduser("~")
+        app_support_dir = os.path.join(home_dir, 'Library', 'Application Support')
+        logs_dir = os.path.join(home_dir, 'Library', 'Logs')
+        
+        print(f"[INFO] Home directory: {home_dir}")
+        print(f"[INFO] App Support exists: {os.path.exists(app_support_dir)}")
+        print(f"[INFO] Logs directory exists: {os.path.exists(logs_dir)}")
+        
+        # Check if we can write to logs directory
+        try:
+            contract_logs_dir = os.path.join(logs_dir, 'Contract Intelligence')
+            os.makedirs(contract_logs_dir, exist_ok=True)
+            test_file = os.path.join(contract_logs_dir, 'test_write.txt')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            print(f"[INFO] Successfully created and wrote to: {contract_logs_dir}")
+        except Exception as e:
+            print(f"[ERROR] Failed to write to logs directory: {e}")
     
     print("[DIAGNOSTIC] Dependency tracing complete\n")
 
