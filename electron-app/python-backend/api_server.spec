@@ -15,6 +15,14 @@ pydantic_imports = collect_submodules('pydantic')  # Required by FastAPI
 tokenizers_imports = collect_submodules('tokenizers')  # Required by ChromaDB's embedding function
 sentence_transformers_imports = collect_submodules('sentence_transformers')  # Often used with tokenizers
 
+# Critical ChromaDB dependencies
+onnxruntime_imports = []
+try:
+    onnxruntime_imports = collect_submodules('onnxruntime')  # Required by ChromaDB even if not used directly
+except ImportError:
+    print("WARNING: onnxruntime not found, but will be installed during build")
+protobuf_imports = collect_submodules('protobuf')  # Required for ChromaDB's data serialization
+
 # Collect binary dependencies
 from PyInstaller.utils.hooks import collect_dynamic_libs
 tokenizers_binaries = collect_dynamic_libs('tokenizers')
@@ -25,6 +33,14 @@ chromadb_datas = collect_data_files('chromadb')
 tiktoken_datas = collect_data_files('tiktoken')
 tokenizers_datas = collect_data_files('tokenizers')
 sentence_transformers_datas = collect_data_files('sentence_transformers')
+
+# Additional required data files
+onnxruntime_datas = []
+try:
+    onnxruntime_datas = collect_data_files('onnxruntime')
+except ImportError:
+    print("WARNING: onnxruntime not found for data files collection")
+protobuf_datas = collect_data_files('protobuf')
 
 # Add contract_intelligence.py as a data file
 contract_intelligence_file = [
@@ -38,7 +54,7 @@ a = Analysis(
     datas=[
         ('requirements.txt', '.'),
         ('contract_intelligence.py', '.'),  # Explicitly include contract_intelligence.py
-    ] + openai_datas + chromadb_datas + tiktoken_datas + tokenizers_datas + sentence_transformers_datas,
+    ] + openai_datas + chromadb_datas + tiktoken_datas + tokenizers_datas + sentence_transformers_datas + onnxruntime_datas + protobuf_datas,
     hiddenimports=[
         # Standard library modules
         'tempfile', 'shutil', 'logging', 're', 'codecs', 'contextlib', 'pathlib', 'typing',
@@ -191,8 +207,19 @@ a = Analysis(
         'ssl', 'socket', 'email', 'email.message', 'email.parser', 'email.policy',
         
         # JSON and serialization
-        'json.decoder', 'json.encoder', 'marshal', 'pickle', 'copyreg'
-    ] + openai_imports + chromadb_imports + fastapi_imports + starlette_imports + pydantic_imports + tokenizers_imports + sentence_transformers_imports,
+        'json.decoder', 'json.encoder', 'marshal', 'pickle', 'copyreg',
+        
+        # Critical ChromaDB dependencies
+        'onnxruntime',
+        'onnxruntime.capi',
+        'onnxruntime.capi.onnxruntime_pybind11_state',
+        'protobuf',
+        'protobuf.internal',
+        'protobuf.descriptor',
+        'protobuf.message',
+        'protobuf.reflection',
+        'protobuf.json_format'
+    ] + openai_imports + chromadb_imports + fastapi_imports + starlette_imports + pydantic_imports + tokenizers_imports + sentence_transformers_imports + onnxruntime_imports + protobuf_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[

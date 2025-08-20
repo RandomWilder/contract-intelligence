@@ -31,3 +31,7 @@ tiktoken==0.7.0
 # Embeddings and tokenizers (required by ChromaDB)
 tokenizers==0.15.2
 sentence-transformers==2.6.1
+
+# Additional ChromaDB dependencies
+onnxruntime==1.19.2
+protobuf==4.25.4
