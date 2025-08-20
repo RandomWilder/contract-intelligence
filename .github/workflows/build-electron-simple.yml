@@ -76,7 +76,7 @@ jobs:
             
             # Test Windows executable can run
             echo "Testing Windows executable..."
-            cd .. && ./pyinstaller-dist/api_server.exe --help || echo "WARNING: Executable test failed, but continuing..."
+            cd .. && ./pyinstaller-dist/api_server.exe --test-only || echo "WARNING: Executable test failed, but continuing..."
           else
             [ -f "../pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
             echo "macOS executable created: ../pyinstaller-dist/api_server"
@@ -89,7 +89,7 @@ jobs:
             
             # Test macOS executable can run
             echo "Testing macOS executable..."
-            cd .. && ./pyinstaller-dist/api_server --help || echo "WARNING: Executable test failed, but continuing..."
+            cd .. && ./pyinstaller-dist/api_server --test-only || echo "WARNING: Executable test failed, but continuing..."
           fi
           
           echo "PyInstaller build completed successfully"
