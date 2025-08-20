@@ -97,6 +97,15 @@ class ContractIntelligenceApp {
     }
 
     async checkAndHandleSetup() {
+        // Prevent multiple setup checks/windows
+        if (this._setupCheckInProgress) {
+            console.log('⚠️ Setup check already in progress, ignoring duplicate call');
+            return;
+        }
+        
+        // Set flag to prevent duplicate calls
+        this._setupCheckInProgress = true;
+        
         try {
             // Check if we're returning from settings page
             const urlParams = new URLSearchParams(window.location.search);
@@ -109,6 +118,14 @@ class ContractIntelligenceApp {
                 // Skip setup check and load directly since user just verified credentials
                 this.setupNeeded = false;
                 this.loadInitialData();
+                this._setupCheckInProgress = false;
+                return;
+            }
+            
+            // Check if setup modal already exists
+            if (document.getElementById('setup-modal')) {
+                console.log('⚠️ Setup modal already exists, not creating another one');
+                this._setupCheckInProgress = false;
                 return;
             }
             
@@ -128,6 +145,9 @@ class ContractIntelligenceApp {
             console.error('Failed to check setup status:', error);
             // If we can't check setup, try to load normally
             this.loadInitialData();
+        } finally {
+            // Clear flag when done
+            this._setupCheckInProgress = false;
         }
     }
 
@@ -147,33 +167,33 @@ class ContractIntelligenceApp {
                             <p class="step-description">Required for AI-powered contract analysis</p>
                             <div class="input-group">
                                 <input type="password" id="setup-openai-key" placeholder="sk-..." />
-                                <button type="button" id="show-key-btn" onclick="this.previousElementSibling.type = this.previousElementSibling.type === 'password' ? 'text' : 'password'">👁️</button>
+                                <button type="button" id="show-key-btn">👁️</button>
                             </div>
                             <div class="setup-help">
-                                <small>Get your API key from <a href="#" onclick="window.electronAPI.openExternal && window.electronAPI.openExternal('https://platform.openai.com/api-keys')">OpenAI Platform</a></small>
+                                <small>Get your API key from <a href="#" id="openai-link">OpenAI Platform</a></small>
                             </div>
                         </div>
                         
                         <div class="setup-step">
-                            <h3>🔍 Google Cloud Credentials (Optional)</h3>
-                            <p class="step-description">For OCR capabilities with scanned documents</p>
+                            <h3>🔍 Google Cloud Credentials</h3>
+                            <p class="step-description">Required for OCR capabilities with scanned documents</p>
                             <div class="input-group">
                                 <input type="text" id="setup-google-path" placeholder="Select credentials JSON file..." readonly />
-                                <button type="button" onclick="app.selectCredentialsForSetup()">Browse</button>
+                                <button type="button" id="browse-credentials-btn" class="browse-btn">Browse</button>
                             </div>
                             <div class="setup-help">
                                 <small>
-                                    <a href="#" onclick="window.electronAPI.openExternal && window.electronAPI.openExternal('https://console.cloud.google.com/apis/credentials')">Create credentials</a> 
+                                    <a href="#" id="create-credentials-link">Create credentials</a> 
                                     in Google Cloud Console (OAuth 2.0 Client ID, Desktop Application)
                                 </small>
                             </div>
                         </div>
                         
                         <div class="setup-actions">
-                            <button id="setup-save-btn" class="btn btn-primary" onclick="app.saveSetupConfig()">
+                            <button id="setup-save-btn" class="btn btn-primary">
                                 💾 Save & Continue
                             </button>
-                            <button class="btn btn-secondary" onclick="app.skipSetup()">
+                            <button id="skip-setup-btn" class="btn btn-secondary">
                                 ⏭️ Skip Google Setup
                             </button>
                         </div>
@@ -189,6 +209,9 @@ class ContractIntelligenceApp {
         
         // Add modal styles
         this.addSetupModalStyles();
+        
+        // Set up event listeners
+        this.setupModalEventListeners();
     }
 
     addSetupModalStyles() {
@@ -330,8 +353,56 @@ class ContractIntelligenceApp {
         document.head.insertAdjacentHTML('beforeend', styles);
     }
 
+    setupModalEventListeners() {
+        // Show/hide password
+        const showKeyBtn = document.getElementById('show-key-btn');
+        if (showKeyBtn) {
+            showKeyBtn.addEventListener('click', () => {
+                const keyInput = document.getElementById('setup-openai-key');
+                keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+            });
+        }
+        
+        // Browse for credentials file
+        const browseBtn = document.getElementById('browse-credentials-btn');
+        if (browseBtn) {
+            browseBtn.addEventListener('click', () => this.selectCredentialsForSetup());
+        }
+        
+        // OpenAI link
+        const openaiLink = document.getElementById('openai-link');
+        if (openaiLink) {
+            openaiLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.electronAPI.openExternal('https://platform.openai.com/api-keys');
+            });
+        }
+        
+        // Google credentials link
+        const credsLink = document.getElementById('create-credentials-link');
+        if (credsLink) {
+            credsLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.electronAPI.openExternal('https://console.cloud.google.com/apis/credentials');
+            });
+        }
+        
+        // Save button
+        const saveBtn = document.getElementById('setup-save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveSetupConfig());
+        }
+        
+        // Skip button
+        const skipBtn = document.getElementById('skip-setup-btn');
+        if (skipBtn) {
+            skipBtn.addEventListener('click', () => this.skipSetup());
+        }
+    }
+    
     async selectCredentialsForSetup() {
         try {
+            console.log('🔍 Opening file dialog for credentials selection...');
             const result = await window.electronAPI.showOpenDialog({
                 title: 'Select Google Credentials File',
                 filters: [
@@ -341,11 +412,21 @@ class ContractIntelligenceApp {
                 properties: ['openFile']
             });
 
-            if (!result.canceled && result.filePaths.length > 0) {
-                document.getElementById('setup-google-path').value = result.filePaths[0];
+            console.log('📄 File dialog result:', result);
+            if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                const filePath = result.filePaths[0];
+                console.log('📄 Selected file:', filePath);
+                const inputElement = document.getElementById('setup-google-path');
+                if (inputElement) {
+                    inputElement.value = filePath;
+                } else {
+                    console.error('❌ Could not find setup-google-path input element');
+                }
+            } else {
+                console.log('❌ File selection canceled or no file selected');
             }
         } catch (error) {
-            console.error('File selection failed:', error);
+            console.error('❌ File selection failed:', error);
             this.showSetupStatus('error', 'Failed to select file: ' + error.message);
         }
     }
@@ -359,13 +440,23 @@ class ContractIntelligenceApp {
             return;
         }
         
+        if (!googlePath) {
+            this.showSetupStatus('error', 'Google credentials file is required for OCR functionality');
+            return;
+        }
+        
         this.showSetupStatus('loading', 'Validating configuration...');
         
         try {
             const setupData = {
                 openai_key: openaiKey,
-                google_creds_path: googlePath || undefined
+                google_creds_path: googlePath
             };
+            
+            console.log('📤 Sending setup data:', { 
+                openai_key: openaiKey ? '***' : undefined,
+                google_creds_path: googlePath
+            });
             
             const response = await fetch(`${this.backendUrl}/api/config/setup`, {
                 method: 'POST',
@@ -376,6 +467,7 @@ class ContractIntelligenceApp {
             });
             
             const result = await response.json();
+            console.log('📥 Setup response:', result);
             
             if (response.ok && result.success) {
                 this.showSetupStatus('success', 'Configuration saved successfully!');
