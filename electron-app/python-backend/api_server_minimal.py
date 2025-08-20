@@ -309,13 +309,32 @@ def initialize_services():
         if AI_CHROMADB_AVAILABLE:
             try:
                 # Initialize ChromaDB with PERSISTENT storage
-                persist_dir = "./chroma_db"
+                # Use environment variable set in runtime hook for PyInstaller compatibility
+                if getattr(sys, 'frozen', False) and 'CHROMADB_DIR' in os.environ:
+                    persist_dir = os.environ['CHROMADB_DIR']
+                    print(f"[INFO] Using PyInstaller ChromaDB directory: {persist_dir}")
+                else:
+                    persist_dir = "./chroma_db"
+                    print(f"[INFO] Using default ChromaDB directory: {persist_dir}")
+                
                 os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
                 
-                chroma_client = chromadb.PersistentClient(
-                    path=persist_dir,
-                    settings=Settings(anonymized_telemetry=False)
-                )
+                try:
+                    chroma_client = chromadb.PersistentClient(
+                        path=persist_dir,
+                        settings=Settings(anonymized_telemetry=False)
+                    )
+                    print(f"[SUCCESS] ChromaDB initialized with persistent storage at {persist_dir}")
+                except Exception as chroma_error:
+                    print(f"[ERROR] Failed to initialize ChromaDB client: {chroma_error}")
+                    # Try with in-memory client as fallback
+                    try:
+                        print("[RECOVERY] Attempting to use in-memory ChromaDB client")
+                        chroma_client = chromadb.Client(Settings(anonymized_telemetry=False, is_persistent=False))
+                        print("[SUCCESS] ChromaDB initialized with in-memory storage (fallback)")
+                    except Exception as memory_error:
+                        print(f"[ERROR] Failed to initialize in-memory ChromaDB client: {memory_error}")
+                        chroma_client = None
                 print("[SUCCESS] ChromaDB initialized with persistent storage")
             except Exception as e:
                 print(f"[WARNING] Failed to initialize ChromaDB: {e}")
@@ -375,49 +394,70 @@ def initialize_services():
                     print("[WARNING] Sentence-transformers library not available - will use OpenAI embeddings only")
                     SENTENCE_TRANSFORMERS_AVAILABLE = False
                 
+                # Create OpenAI embedding function - ONLY use ada-002, no other models
+                print("[INFO] Creating OpenAI ada-002 embedding function")
                 from chromadb.utils import embedding_functions
                 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
                     api_key=api_key,
-                    model_name="text-embedding-ada-002"
+                    model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
                 )
                 logger.info("Using OpenAI ada-002 embeddings ONLY")
+                print("[SUCCESS] OpenAI ada-002 embedding function created successfully")
             except Exception as e:
-                print(f"[WARNING] Failed to create embedding function: {e}")
+                print(f"[ERROR] Failed to create embedding function: {e}")
+                print("[CRITICAL] ChromaDB will not function properly without embedding function")
                 openai_ef = None
         
         # Try to get existing collection first (only if we have embedding function)
         if openai_ef is not None and chroma_client is not None:
             try:
-                collection = chroma_client.get_collection(
-                    name="contracts_electron",
-                    embedding_function=openai_ef
-                )
-                logger.info("Retrieved existing collection with ada-002 embeddings")
+                print("[INFO] Attempting to get or create ChromaDB collection")
+                collection_name = "contracts_electron"
                 
-                # Verify collection has documents
-                existing_docs = collection.count()
-                logger.info(f"Found {existing_docs} existing document chunks in ChromaDB")
-                
-            except Exception as get_error:
-                logger.info(f"Collection doesn't exist or needs recreation: {get_error}")
-                # Collection doesn't exist, create it
+                # First try to get existing collection
                 try:
-                    collection = chroma_client.create_collection(
-                        name="contracts_electron",
-                        embedding_function=openai_ef,
-                        metadata={
-                            "description": "Contract documents for Electron app",
-                            "embedding_model": "text-embedding-ada-002"
-                        }
+                    print(f"[INFO] Looking for existing collection '{collection_name}'")
+                    collection = chroma_client.get_collection(
+                        name=collection_name,
+                        embedding_function=openai_ef
                     )
-                    logger.info("Created new collection with ada-002 embeddings")
-                except Exception as create_error:
-                    logger.error(f"Failed to create collection: {create_error}")
-                    # Don't raise - allow backend to start without collection
-                    collection = None
+                    print("[SUCCESS] Retrieved existing collection with ada-002 embeddings")
+                    
+                    # Verify collection has documents
+                    existing_docs = collection.count()
+                    print(f"[INFO] Found {existing_docs} existing document chunks in ChromaDB")
+                    
+                except Exception as get_error:
+                    print(f"[INFO] Collection doesn't exist or needs recreation: {get_error}")
+                    
+                    # Collection doesn't exist, create it
+                    try:
+                        print(f"[INFO] Creating new collection '{collection_name}'")
+                        collection = chroma_client.create_collection(
+                            name=collection_name,
+                            embedding_function=openai_ef,
+                            metadata={
+                                "description": "Contract documents for Electron app",
+                                "embedding_model": "text-embedding-ada-002"
+                            }
+                        )
+                        print("[SUCCESS] Created new collection with ada-002 embeddings")
+                    except Exception as create_error:
+                        print(f"[ERROR] Failed to create collection: {create_error}")
+                        # Don't raise - allow backend to start without collection
+                        collection = None
+            except Exception as collection_error:
+                print(f"[ERROR] ChromaDB collection setup failed: {collection_error}")
+                collection = None
         else:
             print("[INFO] Skipping ChromaDB collection setup - no OpenAI API key or ChromaDB client available")
             collection = None
+            
+        # Final status check
+        if collection is not None:
+            print("[SUCCESS] ChromaDB collection setup complete and ready for use")
+        else:
+            print("[WARNING] ChromaDB collection not available - vector search will be disabled")
         
         print("[SUCCESS] Services initialized successfully")
         
@@ -881,7 +921,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.30",
+    version="1.5.43",
     lifespan=lifespan
 )
 
@@ -899,7 +939,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.42",
+        "version": "1.5.43",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
         "openai_ready": openai_client is not None,
@@ -1964,7 +2004,7 @@ async def get_config():
     return {
         "openai_models": ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
         "supported_file_types": ["pdf", "docx", "txt", "jpg", "jpeg", "png"],
-        "version": "1.5.21",
+        "version": "1.5.43",
         "backend_type": "minimal"
     }
 
