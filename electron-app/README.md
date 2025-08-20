@@ -46,7 +46,7 @@ This will:
 ## Development
 
 - **Frontend code**: `src/` directory (HTML, CSS, JavaScript)
-- **Backend code**: `../backend/api_server.py` (FastAPI wrapper)
+- **Backend code**: `python-backend/api_server_minimal.py` (FastAPI backend)
 - **Main process**: `main.js` (Electron main process)
 
 ## Building for Distribution
@@ -102,7 +102,7 @@ electron-app/
 │   └── preload.js       # Security bridge
 └── build/               # Icons and build assets
 
-../backend/
-├── api_server.py        # FastAPI backend
-└── requirements.txt     # Python dependencies
+python-backend/
+├── api_server_minimal.py    # FastAPI backend (PRODUCTION)
+└── requirements.txt         # Python dependencies
 ```

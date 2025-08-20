@@ -20,7 +20,12 @@ try:
     print("[DIAGNOSTIC] Standard library imports successful")
 except ImportError as e:
     print(f"[DIAGNOSTIC] Standard library import failed: {e}")
-    sys.exit(1)
+    # Continue with limited functionality instead of exiting
+    print("[CRITICAL] Standard library import failed but continuing with limited functionality")
+    # Define minimal imports to continue
+    import os
+    import sys
+    import json
 
 # Configure logging to stderr so it appears in Electron terminal
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
@@ -75,9 +80,28 @@ try:
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
     print("[DIAGNOSTIC] FastAPI imports successful")
+    FASTAPI_AVAILABLE = True
 except ImportError as e:
     print(f"[DIAGNOSTIC] FastAPI import failed: {e}")
-    sys.exit(1)
+    print("[CRITICAL] FastAPI import failed - this is required for the backend to function")
+    print("[RECOVERY] Attempting to continue with minimal HTTP server...")
+    FASTAPI_AVAILABLE = False
+    
+    # Define minimal HTTP server for health endpoint only
+    import http.server
+    import socketserver
+    
+    class MinimalHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "limited",
+                    "version": "1.5.32",
+                    "message": "Running in emergency mode - FastAPI unavailable"
+                }).encode())
 
 # Document processing
 print("[DIAGNOSTIC] Testing document processing imports...")
@@ -87,9 +111,11 @@ try:
     from PIL import Image
     import fitz  # PyMuPDF for PDF to image conversion
     print("[DIAGNOSTIC] Document processing imports successful")
+    DOCUMENT_PROCESSING_AVAILABLE = True
 except ImportError as e:
     print(f"[DIAGNOSTIC] Document processing import failed: {e}")
-    sys.exit(1)
+    print("[WARNING] Document processing imports failed - document upload functionality will be limited")
+    DOCUMENT_PROCESSING_AVAILABLE = False
 
 # AI and vector database
 print("[DIAGNOSTIC] Testing AI/ChromaDB imports...")
@@ -98,9 +124,21 @@ try:
     import chromadb
     from chromadb.config import Settings
     print("[DIAGNOSTIC] AI/ChromaDB imports successful")
+    AI_CHROMADB_AVAILABLE = True
 except ImportError as e:
     print(f"[DIAGNOSTIC] AI/ChromaDB import failed: {e}")
-    sys.exit(1)
+    print("[WARNING] AI/ChromaDB imports failed - chat functionality will be limited")
+    AI_CHROMADB_AVAILABLE = False
+    
+    # Define minimal stubs for required classes
+    class DummyOpenAI:
+        def __init__(self, api_key=None):
+            self.api_key = api_key
+            
+    # If openai failed to import, create a stub
+    if 'openai' not in sys.modules:
+        openai = type('openai', (), {})
+        openai.OpenAI = DummyOpenAI
 
 # Contract Intelligence Engine
 try:
@@ -201,40 +239,72 @@ def initialize_services():
     """Initialize ChromaDB and OpenAI services with embedding function"""
     global chroma_client, collection, openai_client, contract_intelligence_engine
     
+    # Set defaults for global variables
+    chroma_client = None
+    collection = None
+    openai_client = None
+    contract_intelligence_engine = None
+    
     # Load settings first
-    load_settings()
-    load_google_credentials()
+    try:
+        load_settings()
+        print("[SUCCESS] Settings loaded successfully")
+    except Exception as e:
+        print(f"[WARNING] Failed to load settings: {e}")
+        print("[RECOVERY] Using default settings")
     
     try:
-        # Initialize ChromaDB with PERSISTENT storage
-        persist_dir = "./chroma_db"
-        os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
-        
-        chroma_client = chromadb.PersistentClient(
-            path=persist_dir,
-            settings=Settings(anonymized_telemetry=False)
-        )
-        logger.info(f"ChromaDB initialized with persistent storage at: {persist_dir}")
-        
+        load_google_credentials()
+        print("[SUCCESS] Google credentials loaded (if available)")
+    except Exception as e:
+        print(f"[WARNING] Failed to load Google credentials: {e}")
+    
+    # Initialize ChromaDB if available
+    if AI_CHROMADB_AVAILABLE:
+        try:
+            # Initialize ChromaDB with PERSISTENT storage
+            persist_dir = "./chroma_db"
+            os.makedirs(persist_dir, exist_ok=True)  # Ensure directory exists
+            
+            chroma_client = chromadb.PersistentClient(
+                path=persist_dir,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            print("[SUCCESS] ChromaDB initialized with persistent storage")
+        except Exception as e:
+            print(f"[WARNING] Failed to initialize ChromaDB: {e}")
+            print("[RECOVERY] Vector search functionality will be limited")
+            chroma_client = None
+    else:
+        print("[INFO] ChromaDB not available - vector search disabled")
+    
+    # Initialize OpenAI if available
+    try:
         # Initialize OpenAI (from settings or environment)
         api_key = app_settings.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
         if api_key:
-            openai_client = openai.OpenAI(api_key=api_key)
-            print("[SUCCESS] OpenAI client initialized")
-            
-            # Initialize Contract Intelligence Engine
-            if CONTRACT_INTELLIGENCE_AVAILABLE:
-                try:
-                    contract_intelligence_engine = ContractIntelligenceEngine(openai_client)
-                    print("[SUCCESS] Contract Intelligence Engine initialized")
-                except Exception as e:
-                    print(f"[WARNING] Failed to initialize Contract Intelligence Engine: {e}")
-                    contract_intelligence_engine = None
+            if 'openai' in sys.modules and hasattr(openai, 'OpenAI'):
+                openai_client = openai.OpenAI(api_key=api_key)
+                print("[SUCCESS] OpenAI client initialized")
             else:
-                print("[INFO] Contract Intelligence Engine not available")
-                
+                print("[WARNING] OpenAI module not available")
+                openai_client = DummyOpenAI(api_key=api_key)
+                print("[RECOVERY] Using dummy OpenAI client")
         else:
             print("[WARNING] No OpenAI API key found - please configure in settings")
+    except Exception as e:
+        print(f"[WARNING] Failed to initialize OpenAI client: {e}")
+    
+    # Initialize Contract Intelligence Engine if available
+    if CONTRACT_INTELLIGENCE_AVAILABLE and openai_client:
+        try:
+            contract_intelligence_engine = ContractIntelligenceEngine(openai_client)
+            print("[SUCCESS] Contract Intelligence Engine initialized")
+        except Exception as e:
+            print(f"[WARNING] Failed to initialize Contract Intelligence Engine: {e}")
+            contract_intelligence_engine = None
+    else:
+        print("[INFO] Contract Intelligence Engine not available")
         
         # ONLY use OpenAI embeddings - NO default ChromaDB embeddings
         if not api_key:
@@ -283,7 +353,7 @@ def initialize_services():
             collection = None
         
         print("[SUCCESS] ChromaDB initialized successfully")
-            
+        
     except Exception as e:
         print(f"[ERROR] Failed to initialize services: {e}")
         # Don't raise - allow backend to continue running
@@ -762,10 +832,16 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.5.21",
+        "version": "1.5.32",
         "backend": "minimal",
         "chromadb_ready": chroma_client is not None,
-        "openai_ready": openai_client is not None
+        "openai_ready": openai_client is not None,
+        "features_available": {
+            "document_processing": DOCUMENT_PROCESSING_AVAILABLE,
+            "vector_search": AI_CHROMADB_AVAILABLE,
+            "contract_intelligence": CONTRACT_INTELLIGENCE_AVAILABLE
+        },
+        "backend_mode": "full" if AI_CHROMADB_AVAILABLE and DOCUMENT_PROCESSING_AVAILABLE else "limited"
     }
 
 @app.post("/api/test-upload")
@@ -2077,15 +2153,37 @@ if __name__ == "__main__":
         print(f"[WARNING] Using port {port} instead of default 8503 due to port conflict")
     
     # Run server with error handling
-    try:
-        uvicorn.run(
-            app,
-            host="127.0.0.1",
-            port=port,
-            log_level="info",
-            access_log=False
-        )
-    except Exception as e:
-        print(f"[ERROR] Failed to start server: {e}")
-        exit(1)
+    if FASTAPI_AVAILABLE:
+        try:
+            print("[INFO] Starting FastAPI server...")
+            uvicorn.run(
+                app,
+                host="127.0.0.1",
+                port=port,
+                log_level="info",
+                access_log=False
+            )
+        except Exception as e:
+            print(f"[ERROR] Failed to start FastAPI server: {e}")
+            print("[RECOVERY] Attempting to start minimal HTTP server...")
+            try:
+                # Fall back to basic HTTP server for health endpoint only
+                handler = MinimalHandler
+                with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
+                    print(f"[INFO] Minimal HTTP server started at port {port}")
+                    httpd.serve_forever()
+            except Exception as e2:
+                print(f"[CRITICAL] Failed to start minimal HTTP server: {e2}")
+                exit(1)
+    else:
+        try:
+            # Use minimal HTTP server
+            print("[INFO] Starting minimal HTTP server (FastAPI not available)...")
+            handler = MinimalHandler
+            with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
+                print(f"[INFO] Minimal HTTP server started at port {port}")
+                httpd.serve_forever()
+        except Exception as e:
+            print(f"[CRITICAL] Failed to start minimal HTTP server: {e}")
+            exit(1)
 
