@@ -12,6 +12,13 @@ const PYTHON_BACKEND_PORT = 8503;
 const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
 
 function createWindow() {
+    console.log('🏗️ === CREATING MAIN WINDOW ===');
+    
+    // Send immediate diagnostic to any existing renderer
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.executeJavaScript(`console.log("🏗️ Main process: Creating window...")`);
+    }
+    
     // Create the browser window
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -31,9 +38,14 @@ function createWindow() {
 
     // Show window when ready to prevent visual flash
     mainWindow.once('ready-to-show', () => {
+        console.log('🪟 === WINDOW READY TO SHOW ===');
         mainWindow.show();
         
+        // Send diagnostic to renderer
+        mainWindow.webContents.executeJavaScript(`console.log("🪟 Main process: Window ready, starting backend...")`);
+        
         // Start Python backend
+        console.log('🚀 === ABOUT TO START PYTHON BACKEND ===');
         startPythonBackend();
     });
 
@@ -52,6 +64,12 @@ function createWindow() {
 
 function startPythonBackend() {
     console.log(`🔥 === STARTING PYTHON BACKEND FUNCTION ===`);
+    
+    // Send to renderer immediately
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.executeJavaScript(`console.log("🔥 Main process: Starting Python backend function...")`);
+    }
+    
     try {
         // **FIX #4: Backend path resolution for distribution**
         const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -323,7 +341,11 @@ function showErrorDialog(message) {
 }
 
 // App event listeners
-app.whenReady().then(createWindow);
+console.log('🚀 === ELECTRON APP STARTING ===');
+app.whenReady().then(() => {
+    console.log('✅ === ELECTRON APP READY ===');
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
     stopPythonBackend();
