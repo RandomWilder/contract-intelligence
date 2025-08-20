@@ -24,12 +24,12 @@ contract_intelligence_file = [
 ]
 
 a = Analysis(
-    ['python-backend/api_server_minimal.py'],
-    pathex=[],
+    ['api_server_minimal.py'],
+    pathex=['.'],
     binaries=[],
     datas=[
-        ('python-backend/requirements.txt', '.'),
-        ('python-backend/contract_intelligence.py', '.'),  # Explicitly include contract_intelligence.py
+        ('requirements.txt', '.'),
+        ('contract_intelligence.py', '.'),  # Explicitly include contract_intelligence.py
     ] + openai_datas + chromadb_datas + tiktoken_datas,
     hiddenimports=[
         # Standard library modules
@@ -177,7 +177,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[
         # Add a runtime hook to handle PyInstaller environment
-        'python-backend/pyinstaller_runtime_hook.py'
+        'pyinstaller_runtime_hook.py'
     ],
     excludes=[],
     win_no_prefer_redirects=False,

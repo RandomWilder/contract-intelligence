@@ -60,36 +60,36 @@ jobs:
           pip install pyinstaller
 
       - name: Build Python executable with PyInstaller
-        working-directory: electron-app
+        working-directory: electron-app/python-backend
         shell: bash
         run: |
           echo "Building Python backend executable with PyInstaller..."
           
           # Use our pre-created spec file
-          pyinstaller python-backend/api_server.spec --clean --noconfirm --distpath pyinstaller-dist
+          pyinstaller api_server.spec --clean --noconfirm --distpath ../pyinstaller-dist
           
           # Verify the executable was created
           if [ "${{ matrix.platform }}" = "win" ]; then
-            [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not created"; exit 1; }
-            echo "Windows executable created: pyinstaller-dist/api_server.exe"
-            ls -la pyinstaller-dist/api_server.exe
+            [ -f "../pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not created"; exit 1; }
+            echo "Windows executable created: ../pyinstaller-dist/api_server.exe"
+            ls -la ../pyinstaller-dist/api_server.exe
             
             # Test Windows executable can run
             echo "Testing Windows executable..."
-            ./pyinstaller-dist/api_server.exe --help || echo "WARNING: Executable test failed, but continuing..."
+            cd .. && ./pyinstaller-dist/api_server.exe --help || echo "WARNING: Executable test failed, but continuing..."
           else
-            [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
-            echo "macOS executable created: pyinstaller-dist/api_server"
-            ls -la pyinstaller-dist/api_server
+            [ -f "../pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
+            echo "macOS executable created: ../pyinstaller-dist/api_server"
+            ls -la ../pyinstaller-dist/api_server
             
             # Ensure executable permissions on macOS
             echo "Setting executable permissions on macOS binary..."
-            chmod +x pyinstaller-dist/api_server
-            ls -la pyinstaller-dist/api_server
+            chmod +x ../pyinstaller-dist/api_server
+            ls -la ../pyinstaller-dist/api_server
             
             # Test macOS executable can run
             echo "Testing macOS executable..."
-            ./pyinstaller-dist/api_server --help || echo "WARNING: Executable test failed, but continuing..."
+            cd .. && ./pyinstaller-dist/api_server --help || echo "WARNING: Executable test failed, but continuing..."
           fi
           
           echo "PyInstaller build completed successfully"

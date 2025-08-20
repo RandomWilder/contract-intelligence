@@ -1,6 +1,6 @@
 {
   "name": "contract-intelligence-desktop",
-  "version": "1.5.36",
+  "version": "1.5.37",
   "description": "Contract Intelligence Platform - Desktop App",
   "main": "main.js",
   "scripts": {
