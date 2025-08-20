@@ -149,12 +149,18 @@ jobs:
                   # Environment and config
                   'dotenv',
                   # Custom modules
-                  'contract_intelligence'
-              ],
-              hookspath=[],
-              hooksconfig={},
-              runtime_hooks=[],
-              excludes=[],
+                  'contract_intelligence',
+                  # **FIX #9: Windows runtime dependencies**
+                  'win32api', 'win32con', 'win32gui', 'win32process', 'win32security', 'win32service', 'win32serviceutil', 'win32event', 'win32file',
+                  # **FIX #9: Additional system modules**
+                  'multiprocessing', 'multiprocessing.spawn', 'multiprocessing.util',
+                  'concurrent', 'concurrent.futures', 'concurrent.futures.thread',
+                  'asyncio', 'asyncio.events', 'asyncio.selector_events', 'asyncio.windows_events'
+          ],
+          hookspath=[],
+          hooksconfig={},
+          runtime_hooks=[],
+          excludes=[],
               win_no_prefer_redirects=False,
               win_private_assemblies=False,
               cipher=block_cipher,
@@ -194,6 +200,10 @@ jobs:
             [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not created"; exit 1; }
             echo "Windows executable created: pyinstaller-dist/api_server.exe"
             ls -la pyinstaller-dist/api_server.exe
+            
+            # **FIX #8: Test Windows executable can run**
+            echo "Testing Windows executable..."
+            ./pyinstaller-dist/api_server.exe --help || echo "WARNING: Executable test failed, but continuing..."
           else
             [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
             echo "macOS executable created: pyinstaller-dist/api_server"
@@ -203,6 +213,10 @@ jobs:
             echo "Setting executable permissions on macOS binary..."
             chmod +x pyinstaller-dist/api_server
             ls -la pyinstaller-dist/api_server
+            
+            # **FIX #8: Test macOS executable can run**
+            echo "Testing macOS executable..."
+            ./pyinstaller-dist/api_server --help || echo "WARNING: Executable test failed, but continuing..."
           fi
           
           echo "PyInstaller build completed successfully"

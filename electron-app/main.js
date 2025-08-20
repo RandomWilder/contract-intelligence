@@ -51,9 +51,11 @@ function createWindow() {
 }
 
 function startPythonBackend() {
+    console.log(`🔥 === STARTING PYTHON BACKEND FUNCTION ===`);
     try {
         // **FIX #4: Backend path resolution for distribution**
         const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+        console.log(`🔧 Environment check: NODE_ENV=${process.env.NODE_ENV}, isPackaged=${app.isPackaged}, isDev=${isDev}`);
         
         let backendPath;
         let workingDir;
@@ -67,46 +69,61 @@ function startPythonBackend() {
             const executableName = process.platform === 'win32' ? 'api_server.exe' : 'api_server';
             backendPath = path.join(process.resourcesPath, executableName);
             workingDir = process.resourcesPath;
+            
+            // **CRITICAL FIX: Ensure executable exists before proceeding**
+            const fs = require('fs');
+            if (!fs.existsSync(backendPath)) {
+                console.error(`🚨 CRITICAL ERROR: Backend executable not found at: ${backendPath}`);
+                console.error(`🔍 Available files in ${process.resourcesPath}:`);
+                try {
+                    const files = fs.readdirSync(process.resourcesPath);
+                    files.forEach(file => console.error(`  - ${file}`));
+                } catch (e) {
+                    console.error(`  Error reading directory: ${e.message}`);
+                }
+                throw new Error(`Backend executable not found: ${backendPath}`);
+            }
         }
         
-        console.log(`Starting Python backend from: ${backendPath}`);
-        console.log(`Working directory: ${workingDir}`);
-        console.log(`Platform: ${process.platform}, isDev: ${isDev}, isPackaged: ${app.isPackaged}`);
+        console.log(`🚀 Starting Python backend from: ${backendPath}`);
+        console.log(`📁 Working directory: ${workingDir}`);
+        console.log(`🖥️ Platform: ${process.platform}, isDev: ${isDev}, isPackaged: ${app.isPackaged}`);
         
-        // **DIAGNOSTIC: Check if backend executable exists and is accessible**
+        // **CRITICAL DIAGNOSTIC: Check if backend executable exists and is accessible**
         if (!isDev) {
             const fs = require('fs');
-            console.log(`=== PRODUCTION BACKEND DIAGNOSTIC ===`);
-            console.log(`process.resourcesPath: ${process.resourcesPath}`);
-            console.log(`Expected backend path: ${backendPath}`);
+            console.log(`🔍 === PRODUCTION BACKEND DIAGNOSTIC ===`);
+            console.log(`📂 process.resourcesPath: ${process.resourcesPath}`);
+            console.log(`🎯 Expected backend path: ${backendPath}`);
             
             try {
                 if (fs.existsSync(backendPath)) {
                     const stats = fs.statSync(backendPath);
                     console.log(`✅ Backend executable found!`);
-                    console.log(`   Size: ${stats.size} bytes`);
-                    console.log(`   Permissions: ${stats.mode.toString(8)}`);
-                    console.log(`   Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
+                    console.log(`📏 Size: ${stats.size} bytes`);
+                    console.log(`🔐 Permissions: ${stats.mode.toString(8)}`);
+                    console.log(`🏃 Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
                 } else {
                     console.log(`❌ Backend executable NOT FOUND at: ${backendPath}`);
+                    console.log(`🚨 THIS IS THE PROBLEM - BACKEND MISSING!`);
                     
                     // List what's actually in the resources directory
-                    console.log(`Contents of ${process.resourcesPath}:`);
+                    console.log(`📋 Contents of ${process.resourcesPath}:`);
                     try {
                         const files = fs.readdirSync(process.resourcesPath);
                         files.forEach(file => {
                             const filePath = path.join(process.resourcesPath, file);
                             const stat = fs.statSync(filePath);
-                            console.log(`  ${stat.isDirectory() ? 'DIR' : 'FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
+                            console.log(`  ${stat.isDirectory() ? '📁 DIR' : '📄 FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
                         });
                     } catch (dirError) {
-                        console.log(`   Error reading directory: ${dirError.message}`);
+                        console.log(`❌ Error reading directory: ${dirError.message}`);
                     }
                 }
             } catch (error) {
                 console.log(`❌ Error checking backend: ${error.message}`);
             }
-            console.log(`=== END DIAGNOSTIC ===`);
+            console.log(`🔍 === END DIAGNOSTIC ===`);
         }
         
         // **FIX #5: macOS executable permissions check**
