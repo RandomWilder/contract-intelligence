@@ -92,38 +92,49 @@ function startPythonBackend() {
         // **CRITICAL DIAGNOSTIC: Check if backend executable exists and is accessible**
         if (!isDev) {
             const fs = require('fs');
-            console.log(`🔍 === PRODUCTION BACKEND DIAGNOSTIC ===`);
-            console.log(`📂 process.resourcesPath: ${process.resourcesPath}`);
-            console.log(`🎯 Expected backend path: ${backendPath}`);
+            const diagnosticMessages = [];
+            
+            function logDiagnostic(message) {
+                console.log(message);
+                diagnosticMessages.push(message);
+                // Also send to renderer immediately
+                if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.executeJavaScript(`console.log("${message.replace(/"/g, '\\"')}")`);
+                }
+            }
+            
+            logDiagnostic(`🔍 === PRODUCTION BACKEND DIAGNOSTIC ===`);
+            logDiagnostic(`📂 process.resourcesPath: ${process.resourcesPath}`);
+            logDiagnostic(`🎯 Expected backend path: ${backendPath}`);
             
             try {
                 if (fs.existsSync(backendPath)) {
                     const stats = fs.statSync(backendPath);
-                    console.log(`✅ Backend executable found!`);
-                    console.log(`📏 Size: ${stats.size} bytes`);
-                    console.log(`🔐 Permissions: ${stats.mode.toString(8)}`);
-                    console.log(`🏃 Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
+                    logDiagnostic(`✅ Backend executable found!`);
+                    logDiagnostic(`📏 Size: ${stats.size} bytes`);
+                    logDiagnostic(`🔐 Permissions: ${stats.mode.toString(8)}`);
+                    logDiagnostic(`🏃 Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
                 } else {
-                    console.log(`❌ Backend executable NOT FOUND at: ${backendPath}`);
-                    console.log(`🚨 THIS IS THE PROBLEM - BACKEND MISSING!`);
+                    logDiagnostic(`❌ Backend executable NOT FOUND at: ${backendPath}`);
+                    logDiagnostic(`🚨 THIS IS THE PROBLEM - BACKEND MISSING!`);
                     
                     // List what's actually in the resources directory
-                    console.log(`📋 Contents of ${process.resourcesPath}:`);
+                    logDiagnostic(`📋 Contents of ${process.resourcesPath}:`);
                     try {
                         const files = fs.readdirSync(process.resourcesPath);
                         files.forEach(file => {
                             const filePath = path.join(process.resourcesPath, file);
                             const stat = fs.statSync(filePath);
-                            console.log(`  ${stat.isDirectory() ? '📁 DIR' : '📄 FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
+                            logDiagnostic(`  ${stat.isDirectory() ? '📁 DIR' : '📄 FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
                         });
                     } catch (dirError) {
-                        console.log(`❌ Error reading directory: ${dirError.message}`);
+                        logDiagnostic(`❌ Error reading directory: ${dirError.message}`);
                     }
                 }
             } catch (error) {
-                console.log(`❌ Error checking backend: ${error.message}`);
+                logDiagnostic(`❌ Error checking backend: ${error.message}`);
             }
-            console.log(`🔍 === END DIAGNOSTIC ===`);
+            logDiagnostic(`🔍 === END DIAGNOSTIC ===`);
         }
         
         // **FIX #5: macOS executable permissions check**
@@ -217,10 +228,18 @@ function startPythonBackend() {
         });
 
         pythonProcess.on('error', (error) => {
-            console.error('Failed to start Python process:', error);
+            console.error('🚨 Failed to start Python process:', error);
+            
+            // Send error to renderer console
+            if (mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.executeJavaScript(`console.error("🚨 PYTHON PROCESS SPAWN ERROR: ${error.message.replace(/"/g, '\\"')}")`);
+                mainWindow.webContents.executeJavaScript(`console.error("🚨 Error code: ${error.code || 'unknown'}");`);
+                mainWindow.webContents.executeJavaScript(`console.error("🚨 Error path: ${error.path || 'unknown'}");`);
+            }
+            
             const errorMessage = process.platform === 'darwin'
                 ? `Failed to start Python backend: ${error.message}. This might be due to missing executable permissions or dependencies.`
-                : 'Failed to start Python backend. Please ensure Python is available on your system.';
+                : `Failed to start Python backend: ${error.message}. Please ensure the backend executable exists and has proper permissions.`;
             showErrorDialog(errorMessage);
         });
 
