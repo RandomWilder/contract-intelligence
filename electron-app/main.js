@@ -12,11 +12,11 @@ const PYTHON_BACKEND_PORT = 8503;
 const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
 
 function createWindow() {
-    console.log('🏗️ === CREATING MAIN WINDOW ===');
+    console.log('=== CREATING MAIN WINDOW ===');
     
     // Send immediate diagnostic to any existing renderer
     if (mainWindow && mainWindow.webContents) {
-        mainWindow.webContents.executeJavaScript(`console.log("🏗️ Main process: Creating window...")`);
+        mainWindow.webContents.executeJavaScript(`console.log("Main process: Creating window...")`);
     }
     
     // Create the browser window
@@ -38,14 +38,14 @@ function createWindow() {
 
     // Show window when ready to prevent visual flash
     mainWindow.once('ready-to-show', () => {
-        console.log('🪟 === WINDOW READY TO SHOW ===');
+        console.log('=== WINDOW READY TO SHOW ===');
         mainWindow.show();
         
         // Send diagnostic to renderer
-        mainWindow.webContents.executeJavaScript(`console.log("🪟 Main process: Window ready, starting backend...")`);
+        mainWindow.webContents.executeJavaScript(`console.log("Main process: Window ready, starting backend...")`);
         
         // Start Python backend
-        console.log('🚀 === ABOUT TO START PYTHON BACKEND ===');
+        console.log('=== ABOUT TO START PYTHON BACKEND ===');
         startPythonBackend();
     });
 
@@ -63,17 +63,17 @@ function createWindow() {
 }
 
 function startPythonBackend() {
-    console.log(`🔥 === STARTING PYTHON BACKEND FUNCTION ===`);
+    console.log(`=== STARTING PYTHON BACKEND FUNCTION ===`);
     
     // Send to renderer immediately
     if (mainWindow && mainWindow.webContents) {
-        mainWindow.webContents.executeJavaScript(`console.log("🔥 Main process: Starting Python backend function...")`);
+        mainWindow.webContents.executeJavaScript(`console.log("Main process: Starting Python backend function...")`);
     }
     
     try {
         // **FIX #4: Backend path resolution for distribution**
         const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-        console.log(`🔧 Environment check: NODE_ENV=${process.env.NODE_ENV}, isPackaged=${app.isPackaged}, isDev=${isDev}`);
+        console.log(`Environment check: NODE_ENV=${process.env.NODE_ENV}, isPackaged=${app.isPackaged}, isDev=${isDev}`);
         
         let backendPath;
         let workingDir;
@@ -91,8 +91,8 @@ function startPythonBackend() {
             // **CRITICAL FIX: Ensure executable exists before proceeding**
             const fs = require('fs');
             if (!fs.existsSync(backendPath)) {
-                console.error(`🚨 CRITICAL ERROR: Backend executable not found at: ${backendPath}`);
-                console.error(`🔍 Available files in ${process.resourcesPath}:`);
+                console.error(`CRITICAL ERROR: Backend executable not found at: ${backendPath}`);
+                console.error(`Available files in ${process.resourcesPath}:`);
                 try {
                     const files = fs.readdirSync(process.resourcesPath);
                     files.forEach(file => console.error(`  - ${file}`));
@@ -103,9 +103,9 @@ function startPythonBackend() {
             }
         }
         
-        console.log(`🚀 Starting Python backend from: ${backendPath}`);
-        console.log(`📁 Working directory: ${workingDir}`);
-        console.log(`🖥️ Platform: ${process.platform}, isDev: ${isDev}, isPackaged: ${app.isPackaged}`);
+        console.log(`Starting Python backend from: ${backendPath}`);
+        console.log(`Working directory: ${workingDir}`);
+        console.log(`Platform: ${process.platform}, isDev: ${isDev}, isPackaged: ${app.isPackaged}`);
         
         // **CRITICAL DIAGNOSTIC: Check if backend executable exists and is accessible**
         if (!isDev) {
@@ -121,38 +121,38 @@ function startPythonBackend() {
                 }
             }
             
-            logDiagnostic(`🔍 === PRODUCTION BACKEND DIAGNOSTIC ===`);
-            logDiagnostic(`📂 process.resourcesPath: ${process.resourcesPath}`);
-            logDiagnostic(`🎯 Expected backend path: ${backendPath}`);
+            logDiagnostic(`=== PRODUCTION BACKEND DIAGNOSTIC ===`);
+            logDiagnostic(`process.resourcesPath: ${process.resourcesPath}`);
+            logDiagnostic(`Expected backend path: ${backendPath}`);
             
             try {
                 if (fs.existsSync(backendPath)) {
                     const stats = fs.statSync(backendPath);
-                    logDiagnostic(`✅ Backend executable found!`);
-                    logDiagnostic(`📏 Size: ${stats.size} bytes`);
-                    logDiagnostic(`🔐 Permissions: ${stats.mode.toString(8)}`);
-                    logDiagnostic(`🏃 Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
+                    logDiagnostic(`Backend executable found!`);
+                    logDiagnostic(`Size: ${stats.size} bytes`);
+                    logDiagnostic(`Permissions: ${stats.mode.toString(8)}`);
+                    logDiagnostic(`Is executable: ${!!(stats.mode & parseInt('111', 8))}`);
                 } else {
-                    logDiagnostic(`❌ Backend executable NOT FOUND at: ${backendPath}`);
-                    logDiagnostic(`🚨 THIS IS THE PROBLEM - BACKEND MISSING!`);
+                    logDiagnostic(`Backend executable NOT FOUND at: ${backendPath}`);
+                    logDiagnostic(`THIS IS THE PROBLEM - BACKEND MISSING!`);
                     
                     // List what's actually in the resources directory
-                    logDiagnostic(`📋 Contents of ${process.resourcesPath}:`);
+                    logDiagnostic(`Contents of ${process.resourcesPath}:`);
                     try {
                         const files = fs.readdirSync(process.resourcesPath);
                         files.forEach(file => {
                             const filePath = path.join(process.resourcesPath, file);
                             const stat = fs.statSync(filePath);
-                            logDiagnostic(`  ${stat.isDirectory() ? '📁 DIR' : '📄 FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
+                            logDiagnostic(`  ${stat.isDirectory() ? 'DIR' : 'FILE'}: ${file} (${stat.size || 'N/A'} bytes)`);
                         });
                     } catch (dirError) {
-                        logDiagnostic(`❌ Error reading directory: ${dirError.message}`);
+                        logDiagnostic(`Error reading directory: ${dirError.message}`);
                     }
                 }
             } catch (error) {
-                logDiagnostic(`❌ Error checking backend: ${error.message}`);
+                logDiagnostic(`Error checking backend: ${error.message}`);
             }
-            logDiagnostic(`🔍 === END DIAGNOSTIC ===`);
+            logDiagnostic(`=== END DIAGNOSTIC ===`);
         }
         
         // **FIX #5: macOS executable permissions check**
@@ -213,13 +213,13 @@ function startPythonBackend() {
             
             // **ENHANCED: Capture specific import errors**
             if (output.includes('ModuleNotFoundError') || output.includes('ImportError')) {
-                console.error(`🚨 IMPORT ERROR DETECTED: ${output}`);
+                console.error(`IMPORT ERROR DETECTED: ${output}`);
             }
             if (output.includes('No module named')) {
-                console.error(`🚨 MISSING MODULE: ${output}`);
+                console.error(`MISSING MODULE: ${output}`);
             }
             if (output.includes('Traceback')) {
-                console.error(`🚨 PYTHON TRACEBACK: ${output}`);
+                console.error(`PYTHON TRACEBACK: ${output}`);
             }
             
             handleBackendOutput(data); // Also check stderr for readiness signals
@@ -246,13 +246,13 @@ function startPythonBackend() {
         });
 
         pythonProcess.on('error', (error) => {
-            console.error('🚨 Failed to start Python process:', error);
+            console.error('Failed to start Python process:', error);
             
             // Send error to renderer console
             if (mainWindow && mainWindow.webContents) {
-                mainWindow.webContents.executeJavaScript(`console.error("🚨 PYTHON PROCESS SPAWN ERROR: ${error.message.replace(/"/g, '\\"')}")`);
-                mainWindow.webContents.executeJavaScript(`console.error("🚨 Error code: ${error.code || 'unknown'}");`);
-                mainWindow.webContents.executeJavaScript(`console.error("🚨 Error path: ${error.path || 'unknown'}");`);
+                mainWindow.webContents.executeJavaScript(`console.error("PYTHON PROCESS SPAWN ERROR: ${error.message.replace(/"/g, '\\"')}")`);
+                mainWindow.webContents.executeJavaScript(`console.error("Error code: ${error.code || 'unknown'}");`);
+                mainWindow.webContents.executeJavaScript(`console.error("Error path: ${error.path || 'unknown'}");`);
             }
             
             const errorMessage = process.platform === 'darwin'
@@ -287,14 +287,17 @@ function startPythonBackend() {
             handleBackendOutput(data);
         });
         
-        // Fallback: Start health checks after reasonable delay if no signal detected
+        // **OPTIMIZED: Signal-driven health checks - NO premature attempts**
+        // Only start health checks AFTER backend signals ready via "Uvicorn running on" message
+        
+        // **SAFETY NET: Only if we never get a ready signal after reasonable time**
         setTimeout(() => {
-            if (!healthCheckStarted) {
-                console.log('Starting fallback health checks (no ready signal detected)...');
+            if (!backendReadyDetected && !healthCheckStarted) {
+                console.log('TIMEOUT: No ready signal after 30s - starting emergency health checks...');
                 healthCheckStarted = true;
                 checkBackendHealth();
             }
-        }, 8000); // Increased from 3s to 8s for production compatibility
+        }, 30000); // Much longer timeout - only for true emergencies
 
     } catch (error) {
         console.error('Failed to start Python backend:', error);
@@ -341,9 +344,9 @@ function showErrorDialog(message) {
 }
 
 // App event listeners
-console.log('🚀 === ELECTRON APP STARTING ===');
+console.log('=== ELECTRON APP STARTING ===');
 app.whenReady().then(() => {
-    console.log('✅ === ELECTRON APP READY ===');
+    console.log('=== ELECTRON APP READY ===');
     createWindow();
 });
 

@@ -17,9 +17,9 @@ try:
     import re
     from pathlib import Path
     from typing import List, Dict, Any, Optional
-    print("[DIAGNOSTIC] ✅ Standard library imports successful")
+    print("[DIAGNOSTIC] Standard library imports successful")
 except ImportError as e:
-    print(f"[DIAGNOSTIC] ❌ Standard library import failed: {e}")
+    print(f"[DIAGNOSTIC] Standard library import failed: {e}")
     sys.exit(1)
 
 # Configure logging to stderr so it appears in Electron terminal
@@ -74,9 +74,9 @@ try:
     from fastapi import FastAPI, HTTPException, UploadFile, File, Form
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
-    print("[DIAGNOSTIC] ✅ FastAPI imports successful")
+    print("[DIAGNOSTIC] FastAPI imports successful")
 except ImportError as e:
-    print(f"[DIAGNOSTIC] ❌ FastAPI import failed: {e}")
+    print(f"[DIAGNOSTIC] FastAPI import failed: {e}")
     sys.exit(1)
 
 # Document processing
@@ -86,9 +86,9 @@ try:
     import docx
     from PIL import Image
     import fitz  # PyMuPDF for PDF to image conversion
-    print("[DIAGNOSTIC] ✅ Document processing imports successful")
+    print("[DIAGNOSTIC] Document processing imports successful")
 except ImportError as e:
-    print(f"[DIAGNOSTIC] ❌ Document processing import failed: {e}")
+    print(f"[DIAGNOSTIC] Document processing import failed: {e}")
     sys.exit(1)
 
 # AI and vector database
@@ -97,9 +97,9 @@ try:
     import openai
     import chromadb
     from chromadb.config import Settings
-    print("[DIAGNOSTIC] ✅ AI/ChromaDB imports successful")
+    print("[DIAGNOSTIC] AI/ChromaDB imports successful")
 except ImportError as e:
-    print(f"[DIAGNOSTIC] ❌ AI/ChromaDB import failed: {e}")
+    print(f"[DIAGNOSTIC] AI/ChromaDB import failed: {e}")
     sys.exit(1)
 
 # Contract Intelligence Engine
@@ -744,7 +744,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Contract Intelligence API - Minimal",
     description="Minimal backend API for Contract Intelligence Desktop App",
-    version="1.5.28",
+    version="1.5.29",
     lifespan=lifespan
 )
 
@@ -1759,7 +1759,7 @@ You MUST format your responses using proper Markdown for modern chat interface d
 - **Dates:** [Relevant dates]
 - **Percentages:** [Any percentages or rates]
 
-### ✅ Summary:
+### Summary:
 [Brief summary paragraph with key takeaways]
 
 **Formatting Rules:**
