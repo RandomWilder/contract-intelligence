@@ -36,12 +36,34 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-# Try to import ChromaDB
+# Try to import ChromaDB - with safeguards for dependencies
 try:
     import chromadb
     from chromadb.config import Settings
+    
+    # Explicitly prevent sentence_transformers from being imported indirectly
+    # This will prevent the ONNXMiniLM_L6_V2 error
+    try:
+        # Monkey-patch the embedding functions module if it tries to import sentence_transformers
+        import sys
+        import types
+        
+        # Create stub module to replace sentence_transformers if it's imported
+        stub_module = types.ModuleType('sentence_transformers')
+        stub_module.__path__ = []
+        sys.modules['sentence_transformers'] = stub_module
+        
+        # Import chromadb utils directly to force early failure if there's an issue
+        from chromadb.utils import embedding_functions
+        print("[INFO] Successfully imported ChromaDB with embedding_functions")
+    except Exception as ef_error:
+        print(f"[WARNING] ChromaDB embedding_functions import issue: {ef_error}")
+        # We'll continue anyway - we'll handle this in init_chromadb
+        pass
+        
     AI_CHROMADB_AVAILABLE = True
-except ImportError:
+except ImportError as import_error:
+    print(f"[WARNING] ChromaDB import failed: {import_error}")
     AI_CHROMADB_AVAILABLE = False
 
 # Try to import Google API
@@ -210,13 +232,26 @@ def init_chromadb():
         # Set up ChromaDB directory
         persist_dir = get_chromadb_dir()
         
-        # Create embedding function
-        from chromadb.utils import embedding_functions
-        os.environ["CHROMA_OPENAI_API_KEY"] = api_key
-        openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=api_key,
-            model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
-        )
+        # MODIFIED: Create embedding function - ONLY use OpenAI, never fallback to sentence_transformers
+        try:
+            from chromadb.utils import embedding_functions
+            
+            # Ensure we're not trying to use any sentence_transformers based embedding
+            if hasattr(embedding_functions, "DefaultEmbeddingFunction"):
+                print("[INFO] Disabling ChromaDB's DefaultEmbeddingFunction to avoid sentence_transformers dependency")
+                # Prevent DefaultEmbeddingFunction from being used
+                embedding_functions.DefaultEmbeddingFunction = None
+                
+            # Set up OpenAI embedding explicitly
+            os.environ["CHROMA_OPENAI_API_KEY"] = api_key
+            openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=api_key,
+                model_name="text-embedding-ada-002"  # Explicitly use ada-002 only
+            )
+        except Exception as ef_error:
+            print(f"[ERROR] Failed to initialize OpenAI embedding function: {ef_error}")
+            traceback.print_exc()
+            return None, None
         
         # Initialize client
         client = chromadb.PersistentClient(
@@ -309,7 +344,7 @@ if FASTAPI_AVAILABLE:
         
         return {
             "status": "healthy",
-            "version": "1.5.54",
+            "version": "1.5.55",
             "backend": "minimal",
             "chromadb_ready": chromadb_ready,
             "openai_ready": openai_ready,
@@ -678,7 +713,7 @@ if FASTAPI_AVAILABLE:
                 "persistent_dir": app_settings.get("chromadb_dir")
             },
             "system": {
-                "version": "1.5.54",
+                "version": "1.5.55",
                 "backend": "minimal"
             }
         }

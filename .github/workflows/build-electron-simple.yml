@@ -76,10 +76,11 @@ jobs:
           echo '    "google.oauth2", "google.oauth2.service_account", "google.auth.transport.requests",' >> api_server_minimal.spec
           echo '    "googleapiclient", "googleapiclient.discovery", "googleapiclient.http",' >> api_server_minimal.spec
           echo '    "googleapiclient.errors", "chromadb.config", "chromadb.utils.embedding_functions",' >> api_server_minimal.spec
+          echo '    "sentence_transformers", "sentence_transformers.models", "torch", "torch.nn",' >> api_server_minimal.spec
           echo '    "fitz", "docx", "contextlib", "asynccontextmanager",' >> api_server_minimal.spec
           echo '    "uuid", "io", "re", "math", "base64", "platform"' >> api_server_minimal.spec
           echo ']' >> api_server_minimal.spec
-          echo 'datas = collect_data_files("chromadb") + collect_data_files("uvicorn")' >> api_server_minimal.spec
+          echo 'datas = collect_data_files("chromadb") + collect_data_files("uvicorn") + collect_data_files("sentence_transformers")' >> api_server_minimal.spec
           echo 'a = Analysis(["api_server_minimal.py"], pathex=["."], hiddenimports=hiddenimports, datas=datas)' >> api_server_minimal.spec
           echo 'pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)' >> api_server_minimal.spec
           echo 'exe = EXE(pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [], name="api_server", debug=False, strip=False, upx=True, runtime_tmpdir=None, console=True, argv_emulation=True)' >> api_server_minimal.spec
