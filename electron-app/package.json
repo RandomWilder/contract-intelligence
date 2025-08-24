@@ -1,6 +1,6 @@
 {
   "name": "contract-intelligence-desktop",
-  "version": "1.5.55",
+  "version": "1.5.56",
   "description": "Contract Intelligence Platform - Desktop App",
   "main": "main.js",
   "scripts": {
@@ -66,7 +66,7 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico", 
       "installerHeaderIcon": "build/icon.ico",
-      "installDirectory": "C:\\Program Files\\Contract Intelligence Platform"
+      "defaultInstallLocation": "${programfiles}/Contract Intelligence Platform"
     },
     "dmg": {
       "title": "Contract Intelligence Platform",
