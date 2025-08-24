@@ -10,6 +10,7 @@ import types
 
 print("[INFO] Running pre-import hook...")
 
+# === SENTENCE TRANSFORMERS PATCHING ===
 # Create stub module to replace sentence_transformers
 stub_module = types.ModuleType('sentence_transformers')
 stub_module.__path__ = []
@@ -41,6 +42,68 @@ stub_module.ONNXMiniLM_L6_V2 = ONNXMiniLM_L6_V2
 models_module.ONNXMiniLM_L6_V2 = ONNXMiniLM_L6_V2
 stub_module.models = models_module
 
+# === GOOGLE API PATCHING ===
+# Ensure Google API modules are properly loaded and initialized
+try:
+    print("[INFO] Setting up Google API modules...")
+    
+    # Create base modules
+    google_module = types.ModuleType('google') if 'google' not in sys.modules else sys.modules['google']
+    google_module.__path__ = []
+    sys.modules['google'] = google_module
+    
+    # Create submodules
+    oauth2_module = types.ModuleType('google.oauth2')
+    oauth2_module.__path__ = []
+    sys.modules['google.oauth2'] = oauth2_module
+    
+    auth_module = types.ModuleType('google.auth')
+    auth_module.__path__ = []
+    sys.modules['google.auth'] = auth_module
+    
+    transport_module = types.ModuleType('google.auth.transport')
+    transport_module.__path__ = []
+    sys.modules['google.auth.transport'] = transport_module
+    
+    requests_module = types.ModuleType('google.auth.transport.requests')
+    requests_module.__path__ = []
+    sys.modules['google.auth.transport.requests'] = requests_module
+    
+    # Set up the module hierarchy
+    google_module.oauth2 = oauth2_module
+    google_module.auth = auth_module
+    auth_module.transport = transport_module
+    transport_module.requests = requests_module
+    
+    # Try to import the real modules now that the hierarchy is established
+    try:
+        import google.oauth2.service_account
+        import google.auth.transport.requests
+        import googleapiclient.discovery
+        import googleapiclient.errors
+        import googleapiclient.http
+        print("[INFO] Successfully loaded Google API modules")
+    except ImportError as e:
+        print(f"[WARNING] Some Google API modules could not be loaded: {e}")
+        
+        # Create stub classes if imports failed
+        class DummyCredentials:
+            @staticmethod
+            def from_service_account_file(*args, **kwargs):
+                raise ImportError("Google API credentials are not available in this build.")
+        
+        # Add stub to the modules
+        if not hasattr(oauth2_module, 'service_account'):
+            service_account_module = types.ModuleType('google.oauth2.service_account')
+            service_account_module.__path__ = []
+            sys.modules['google.oauth2.service_account'] = service_account_module
+            service_account_module.Credentials = DummyCredentials
+            oauth2_module.service_account = service_account_module
+            
+except Exception as e:
+    print(f"[WARNING] Failed to set up Google API modules: {e}")
+
+# === CHROMADB PATCHING ===
 # Also directly patch the chromadb embedding function to bypass sentence_transformers
 try:
     # This will pre-load the module where the error occurs to patch it directly
@@ -83,4 +146,4 @@ try:
 except Exception as e:
     print(f"[WARNING] Could not set up chromadb patching: {e}")
 
-print("[INFO] Successfully stubbed sentence_transformers dependencies")
+print("[INFO] All pre-import hooks completed successfully")

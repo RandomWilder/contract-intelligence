@@ -79,7 +79,7 @@ jobs:
           echo '    "fitz", "docx", "contextlib", "asynccontextmanager",' >> api_server_minimal.spec
           echo '    "uuid", "io", "re", "math", "base64", "platform"' >> api_server_minimal.spec
           echo ']' >> api_server_minimal.spec
-          echo 'datas = collect_data_files("chromadb") + collect_data_files("uvicorn")' >> api_server_minimal.spec
+          echo 'datas = collect_data_files("chromadb") + collect_data_files("uvicorn") + collect_data_files("google")' >> api_server_minimal.spec
           
           echo '# Add hook to run before importing any modules' >> api_server_minimal.spec
           echo 'runtime_hooks = ["pre_import_hook.py"]' >> api_server_minimal.spec

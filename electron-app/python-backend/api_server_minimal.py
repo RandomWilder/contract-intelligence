@@ -200,24 +200,61 @@ def init_google():
 
 def get_chromadb_dir():
     """Get ChromaDB directory path"""
+    # First priority: Environment variable (if set and we're in a frozen app)
     if getattr(sys, 'frozen', False) and 'CHROMADB_DIR' in os.environ:
         persist_dir = os.environ['CHROMADB_DIR']
+        print(f"[INFO] Using ChromaDB dir from environment: {persist_dir}")
     else:
-        persist_dir = app_settings.get("chromadb_dir", "./chroma_db")
+        # Second priority: Check app_settings.json
+        settings_dir = app_settings.get("chromadb_dir")
+        if settings_dir and not settings_dir.startswith("./"):
+            # Use absolute path from settings
+            persist_dir = settings_dir
+            print(f"[INFO] Using ChromaDB dir from settings: {persist_dir}")
+        else:
+            # Third priority: Use appropriate app data directory based on platform
+            if platform.system() == 'Windows':
+                # Windows: Use %APPDATA%\ContractIntelligence\ChromaDB
+                app_data = os.environ.get('APPDATA') or os.path.expanduser('~\\AppData\\Roaming')
+                persist_dir = os.path.join(app_data, 'ContractIntelligence', 'ChromaDB')
+            elif platform.system() == 'Darwin':
+                # macOS: Use ~/Library/Application Support/ContractIntelligence/ChromaDB
+                persist_dir = os.path.expanduser('~/Library/Application Support/ContractIntelligence/ChromaDB')
+            else:
+                # Linux/Others: Use ~/.contract_intelligence/chroma_db
+                persist_dir = os.path.join(os.path.expanduser('~'), '.contract_intelligence', 'chroma_db')
+            
+            print(f"[INFO] Using platform-specific ChromaDB dir: {persist_dir}")
     
+    # Create directory and test if writable
     try:
+        print(f"[INFO] Creating ChromaDB directory: {persist_dir}")
         os.makedirs(persist_dir, exist_ok=True)
+        
         # Test if directory is writable
         test_file = os.path.join(persist_dir, 'test_write.txt')
         with open(test_file, 'w') as f:
             f.write('test')
         os.remove(test_file)
+        print(f"[INFO] ChromaDB directory is writable: {persist_dir}")
         return persist_dir
-    except Exception:
-        # Try fallback directory
+    except Exception as e:
+        print(f"[WARNING] Failed to use primary ChromaDB directory: {e}")
+        
+        # Try fallback directory in user's home
         fallback_dir = os.path.join(os.path.expanduser('~'), '.contract_intelligence', 'chroma_db')
-        os.makedirs(fallback_dir, exist_ok=True)
-        return fallback_dir
+        try:
+            print(f"[INFO] Using fallback ChromaDB directory: {fallback_dir}")
+            os.makedirs(fallback_dir, exist_ok=True)
+            return fallback_dir
+        except Exception as fallback_error:
+            print(f"[ERROR] Failed to create fallback directory: {fallback_error}")
+            # Last resort: try temp directory
+            import tempfile
+            temp_dir = os.path.join(tempfile.gettempdir(), 'contract_intelligence_chromadb')
+            os.makedirs(temp_dir, exist_ok=True)
+            print(f"[WARNING] Using temporary directory for ChromaDB: {temp_dir}")
+            return temp_dir
 
 def init_chromadb():
     """Initialize ChromaDB client and collection"""
@@ -344,7 +381,7 @@ if FASTAPI_AVAILABLE:
         
         return {
             "status": "healthy",
-            "version": "1.5.60",
+            "version": "1.5.61",
             "backend": "minimal",
             "chromadb_ready": chromadb_ready,
             "openai_ready": openai_ready,
@@ -713,7 +750,7 @@ if FASTAPI_AVAILABLE:
                 "persistent_dir": app_settings.get("chromadb_dir")
             },
             "system": {
-                "version": "1.5.60",
+                "version": "1.5.61",
                 "backend": "minimal"
             }
         }
