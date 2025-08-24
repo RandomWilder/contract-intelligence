@@ -12,42 +12,9 @@ let pythonProcess;
 const PYTHON_BACKEND_PORT = 8503;
 const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
 
-// Helper function to safely handle paths with spaces
-function resolveSafePath(basePath, fileName) {
-    // First try normal path resolution
-    const resolvedPath = path.join(basePath, fileName);
-    
-    // If the file exists at the resolved path, return it
-    if (fs.existsSync(resolvedPath)) {
-        return resolvedPath;
-    }
-    
-    // If the path has spaces and the file doesn't exist, try different approaches
-    if (basePath.includes(' ')) {
-        // Log the issue for diagnostics
-        console.log(`Path with spaces detected: "${basePath}"`);
-        
-        // Try to fix common path issues with spaces
-        const cleanedPath = basePath
-            // Ensure proper spaces between directory components
-            .replace(/([A-Z])/g, ' $1').trim()
-            // Fix common path issues
-            .replace(/Users([^ ])/g, 'Users $1')
-            .replace(/OneDrive([^ ])/g, 'OneDrive $1')
-            .replace(/Desktop([^ ])/g, 'Desktop $1');
-            
-        // Try the cleaned path
-        const altPath = path.join(cleanedPath, fileName);
-        console.log(`Trying alternative path: "${altPath}"`);
-        
-        if (fs.existsSync(altPath)) {
-            console.log(`Alternative path successful!`);
-            return altPath;
-        }
-    }
-    
-    // Fall back to the original path
-    return resolvedPath;
+// Simple path join function - no special handling needed for spaces anymore
+function getBackendPath(basePath, fileName) {
+    return path.join(basePath, fileName);
 }
 
 function createWindow() {
@@ -125,7 +92,8 @@ function startPythonBackend() {
             // Distribution: use PyInstaller executable
             const executableName = process.platform === 'win32' ? 'api_server.exe' : 'api_server';
             // Use the safe path resolver to handle spaces in paths properly
-            backendPath = resolveSafePath(process.resourcesPath, executableName);
+            backendPath = path.join(process.resourcesPath, executableName);
+            console.log(`Direct backend path: ${backendPath}`);
             workingDir = process.resourcesPath;
             
             // **CRITICAL FIX: Ensure executable exists before proceeding**
