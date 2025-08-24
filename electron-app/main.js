@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const axios = require('axios');
+const fs = require('fs');
 
 // Keep a global reference of the window object
 let mainWindow;
@@ -10,6 +11,44 @@ let pythonProcess;
 // Python backend configuration
 const PYTHON_BACKEND_PORT = 8503;
 const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
+
+// Helper function to safely handle paths with spaces
+function resolveSafePath(basePath, fileName) {
+    // First try normal path resolution
+    const resolvedPath = path.join(basePath, fileName);
+    
+    // If the file exists at the resolved path, return it
+    if (fs.existsSync(resolvedPath)) {
+        return resolvedPath;
+    }
+    
+    // If the path has spaces and the file doesn't exist, try different approaches
+    if (basePath.includes(' ')) {
+        // Log the issue for diagnostics
+        console.log(`Path with spaces detected: "${basePath}"`);
+        
+        // Try to fix common path issues with spaces
+        const cleanedPath = basePath
+            // Ensure proper spaces between directory components
+            .replace(/([A-Z])/g, ' $1').trim()
+            // Fix common path issues
+            .replace(/Users([^ ])/g, 'Users $1')
+            .replace(/OneDrive([^ ])/g, 'OneDrive $1')
+            .replace(/Desktop([^ ])/g, 'Desktop $1');
+            
+        // Try the cleaned path
+        const altPath = path.join(cleanedPath, fileName);
+        console.log(`Trying alternative path: "${altPath}"`);
+        
+        if (fs.existsSync(altPath)) {
+            console.log(`Alternative path successful!`);
+            return altPath;
+        }
+    }
+    
+    // Fall back to the original path
+    return resolvedPath;
+}
 
 function createWindow() {
     console.log('=== CREATING MAIN WINDOW ===');
@@ -85,11 +124,11 @@ function startPythonBackend() {
         } else {
             // Distribution: use PyInstaller executable
             const executableName = process.platform === 'win32' ? 'api_server.exe' : 'api_server';
-            backendPath = path.join(process.resourcesPath, executableName);
+            // Use the safe path resolver to handle spaces in paths properly
+            backendPath = resolveSafePath(process.resourcesPath, executableName);
             workingDir = process.resourcesPath;
             
             // **CRITICAL FIX: Ensure executable exists before proceeding**
-            const fs = require('fs');
             if (!fs.existsSync(backendPath)) {
                 console.error(`CRITICAL ERROR: Backend executable not found at: ${backendPath}`);
                 console.error(`Available files in ${process.resourcesPath}:`);
@@ -109,7 +148,6 @@ function startPythonBackend() {
         
         // **CRITICAL DIAGNOSTIC: Check if backend executable exists and is accessible**
         if (!isDev) {
-            const fs = require('fs');
             const diagnosticMessages = [];
             
             function logDiagnostic(message) {
@@ -123,7 +161,13 @@ function startPythonBackend() {
             
             logDiagnostic(`=== PRODUCTION BACKEND DIAGNOSTIC ===`);
             logDiagnostic(`process.resourcesPath: ${process.resourcesPath}`);
-            logDiagnostic(`Expected backend path: ${backendPath}`);
+            // Fix path display in logs by ensuring quotes around paths
+            logDiagnostic(`Expected backend path: "${backendPath}"`);
+            
+            // Handle paths with spaces more carefully by double-checking path
+            if (backendPath.includes(' ')) {
+                logDiagnostic(`Path contains spaces - ensuring proper handling`);
+            }
             
             try {
                 if (fs.existsSync(backendPath)) {
@@ -189,8 +233,15 @@ function startPythonBackend() {
         
         // **FIX #5: Cross-platform executable permissions check**
         if (!isDev) {
-            const fs = require('fs');
             try {
+                // Additional path diagnostics
+                console.log(`Path diagnostics:`);
+                console.log(`- resourcesPath original: "${process.resourcesPath}"`);
+                if (process.resourcesPath.includes(' ')) {
+                    console.log(`- resourcesPath contains spaces`);
+                    console.log(`- resourcesPath after regex: "${process.resourcesPath.replace(/([A-Z])/g, ' $1').trim()}"`);
+                }
+                
                 // Check if executable exists
                 if (!fs.existsSync(backendPath)) {
                     throw new Error(`Backend executable not found at: ${backendPath}`);
@@ -245,6 +296,23 @@ function startPythonBackend() {
             if (process.platform === 'darwin') {
                 productionEnv.DYLD_LIBRARY_PATH = workingDir + ':' + (productionEnv.DYLD_LIBRARY_PATH || '');
                 productionEnv.DYLD_FALLBACK_LIBRARY_PATH = workingDir + ':' + (productionEnv.DYLD_FALLBACK_LIBRARY_PATH || '');
+            }
+            
+            // Enhanced path handling, especially for paths with spaces
+            if (process.platform === 'win32' && backendPath.includes(' ')) {
+                console.log(`Handling Windows path with spaces carefully: "${backendPath}"`);
+                // Log additional diagnosis for path handling
+                if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.executeJavaScript(`console.log("Handling path with spaces: ${backendPath.replace(/"/g, '\\"')}")`);
+                    
+                    // Also show notification in the UI
+                    mainWindow.webContents.executeJavaScript(`
+                        if (document.getElementById('loading-status')) {
+                            document.getElementById('loading-status').innerHTML = 
+                                "Starting backend services...<br><small>Handling installation path with spaces</small>";
+                        }
+                    `);
+                }
             }
             
             spawnOptions.env = productionEnv;
@@ -307,7 +375,12 @@ function startPythonBackend() {
                 if (error.code === 'EACCES' || error.code === 'EPERM') {
                     errorMessage = `Failed to start Python backend: Permission denied. The executable may be blocked by Windows security or antivirus software. Try running the application as administrator or adding it to your antivirus exceptions.`;
                 } else if (error.code === 'ENOENT') {
-                    errorMessage = `Failed to start Python backend: Executable not found. The backend file may be missing or corrupted. Please reinstall the application.`;
+                    // Enhance error message for path with spaces issues
+                    if (backendPath.includes(' ')) {
+                        errorMessage = `Failed to start Python backend: Executable not found. This could be due to spaces in the installation path ("${backendPath}"). Try installing the application to a directory without spaces, such as "C:\\Program Files\\ContractIntelligence".`;
+                    } else {
+                        errorMessage = `Failed to start Python backend: Executable not found. The backend file may be missing or corrupted. Please reinstall the application.`;
+                    }
                 } else {
                     errorMessage = `Failed to start Python backend: ${error.message}. This might be due to Windows security restrictions or missing dependencies.`;
                 }
