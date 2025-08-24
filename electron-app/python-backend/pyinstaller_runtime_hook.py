@@ -16,75 +16,68 @@ if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         sys.path.insert(0, bundle_dir)
     
     # Set up ChromaDB data directory in a writable location
-    if sys.platform == 'darwin':  # macOS
-        # First try app_data directory next to executable
+    try:
+        # Use a simple approach that works across all platforms
         app_data_dir = os.path.join(os.path.dirname(sys.executable), 'app_data')
         chromadb_dir = os.path.join(app_data_dir, 'chroma_db')
         
-        # Check if writable
+        # Try to create directory
         try:
             os.makedirs(chromadb_dir, exist_ok=True)
-            test_file = os.path.join(chromadb_dir, 'test_write.txt')
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
-            print(f"[INFO] Successfully created and wrote to: {chromadb_dir}")
+            print(f"[INFO] Created ChromaDB directory: {chromadb_dir}")
         except Exception as e:
-            print(f"[WARNING] Primary ChromaDB directory not writable: {e}")
-            print("[INFO] Falling back to user directory for ChromaDB")
+            print(f"[WARNING] Could not create primary ChromaDB directory: {e}")
             
-            # Fallback to user's Application Support directory
+            # Fallback to user's home directory
             home_dir = os.path.expanduser("~")
-            app_support_dir = os.path.join(home_dir, 'Library', 'Application Support', '.contract_intelligence')
-            chromadb_dir = os.path.join(app_support_dir, 'chroma_db')
+            if sys.platform == 'darwin':  # macOS
+                user_data_dir = os.path.join(home_dir, 'Library', 'Application Support', '.contract_intelligence')
+            else:  # Windows/Linux
+                user_data_dir = os.path.join(home_dir, '.contract_intelligence')
+                
+            chromadb_dir = os.path.join(user_data_dir, 'chroma_db')
             
             try:
                 os.makedirs(chromadb_dir, exist_ok=True)
                 print(f"[INFO] Created fallback ChromaDB directory: {chromadb_dir}")
             except Exception as e2:
-                print(f"[ERROR] Failed to create fallback directory: {e2}")
+                print(f"[WARNING] Could not create fallback directory: {e2}")
+                
                 # Last resort - use temp directory
                 chromadb_dir = os.path.join(tempfile.gettempdir(), 'contract_intelligence_chroma')
                 os.makedirs(chromadb_dir, exist_ok=True)
                 print(f"[INFO] Using temporary ChromaDB directory: {chromadb_dir}")
-    else:
-        # Windows or Linux
-        app_data_dir = os.path.join(os.path.dirname(sys.executable), 'app_data') if getattr(sys, 'frozen', False) else './app_data'
-        chromadb_dir = os.path.join(app_data_dir, 'chroma_db')
-        os.makedirs(chromadb_dir, exist_ok=True)
+    except Exception as e:
+        print(f"[ERROR] Failed to set up ChromaDB directory: {e}")
+        # Absolute last resort
+        chromadb_dir = tempfile.mkdtemp(prefix="chromadb_")
     
     # Set environment variable for ChromaDB
     os.environ['CHROMADB_DIR'] = chromadb_dir
     print(f"[INFO] Setting ChromaDB directory to: {os.environ['CHROMADB_DIR']}")
     
-    # Create logs directory for macOS
-    if sys.platform == 'darwin':
-        home_dir = os.path.expanduser("~")
-        logs_dir = os.path.join(home_dir, 'Library', 'Logs', 'Contract Intelligence')
+    # Create logs directory - simplified approach
+    try:
+        # Create a logs directory that works across platforms
+        if sys.platform == 'darwin':
+            home_dir = os.path.expanduser("~")
+            logs_dir = os.path.join(home_dir, 'Library', 'Logs', 'Contract Intelligence')
+        else:
+            logs_dir = os.path.join(os.path.dirname(sys.executable), 'logs')
+            
         try:
             os.makedirs(logs_dir, exist_ok=True)
-            # Test write permissions
-            test_file = os.path.join(logs_dir, 'test_write.txt')
-            try:
-                with open(test_file, 'w') as f:
-                    f.write('test')
-                os.remove(test_file)
-                print(f"[INFO] Created logs directory with write permissions: {logs_dir}")
-            except Exception as write_error:
-                print(f"[WARNING] Logs directory exists but is not writable: {write_error}")
-                # Try fallback to temp directory
-                logs_dir = os.path.join(tempfile.gettempdir(), 'contract_intelligence_logs')
-                os.makedirs(logs_dir, exist_ok=True)
-                print(f"[INFO] Using temporary logs directory: {logs_dir}")
-        except Exception as e:
-            print(f"[WARNING] Failed to create logs directory: {e}")
-            # Try fallback to temp directory
+            print(f"[INFO] Created logs directory: {logs_dir}")
+        except Exception:
+            # Fallback to temp directory if needed
             logs_dir = os.path.join(tempfile.gettempdir(), 'contract_intelligence_logs')
             os.makedirs(logs_dir, exist_ok=True)
             print(f"[INFO] Using temporary logs directory: {logs_dir}")
             
-        # Set environment variable for logs directory
+        # Set environment variable for logs
         os.environ['CI_LOGS_DIR'] = logs_dir
+    except Exception as e:
+        print(f"[WARNING] Failed to set up logging directory: {e}")
     
     # Ensure contract_intelligence.py is accessible
     contract_intelligence_path = os.path.join(bundle_dir, 'contract_intelligence.py')
@@ -121,3 +114,4 @@ if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
 else:
     # Running in normal Python environment
     print("[INFO] Running in normal Python environment")
+

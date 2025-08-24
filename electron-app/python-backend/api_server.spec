@@ -260,7 +260,5 @@ exe = EXE(
     argv_emulation=True,  # Enable argv emulation for macOS compatibility
     target_arch=None,
     codesign_identity=None,
-    entitlements_file=None,
-    # Fix for macOS Python indentation error
-    exclude_module=['_frozen_importlib', '_frozen_importlib_external']
+    entitlements_file=None
 )

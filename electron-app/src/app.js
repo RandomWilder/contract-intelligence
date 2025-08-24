@@ -107,6 +107,11 @@ class ContractIntelligenceApp {
         this._setupCheckInProgress = true;
         
         try {
+            // Always update status indicators and load documents first
+            // This ensures indicators and document list are updated regardless of where we're coming from
+            await this.updateStatus();
+            await this.loadDocuments(); // Load documents on startup just like when returning from settings
+            
             // Check if we're returning from settings page
             const urlParams = new URLSearchParams(window.location.search);
             const fromSettings = urlParams.get('from') === 'settings';
@@ -565,9 +570,6 @@ class ContractIntelligenceApp {
 
     async loadInitialData() {
         try {
-            // Load status
-            await this.updateStatus();
-            
             // Load documents
             await this.loadDocuments();
             
@@ -592,7 +594,7 @@ class ContractIntelligenceApp {
             // Update status indicators
             this.updateStatusIndicator('backend-status', '✅', 'Backend Ready');
             this.updateStatusIndicator('openai-status', 
-                status.openai_configured ? '✅' : '❌', 
+                status.openai.available ? '✅' : '❌', 
                 'OpenAI'
             );
             this.updateStatusIndicator('google-status', 
@@ -601,7 +603,7 @@ class ContractIntelligenceApp {
             );
             this.updateStatusIndicator('docs-status', 
                 '📊', 
-                `${status.documents_count} Documents`
+                `${status.documents?.count || 0} Documents`
             );
             
 
@@ -814,11 +816,7 @@ class ContractIntelligenceApp {
     showUploadOptions() {
         document.querySelector('.upload-area').style.display = 'none';
         document.querySelector('.upload-options').style.display = 'block';
-        
-        // Auto-select OCR for images
-        if (this.currentFile && this.currentFile.type.startsWith('image/')) {
-            document.getElementById('use-ocr').checked = true;
-        }
+        // OCR is now automatic - no checkbox needed
     }
 
     cancelUpload() {
@@ -834,7 +832,7 @@ class ContractIntelligenceApp {
         const formData = new FormData();
         formData.append('file', this.currentFile);
         formData.append('folder', document.getElementById('folder-select').value);
-        formData.append('use_ocr', document.getElementById('use-ocr').checked ? 'true' : 'false');
+        formData.append('use_ocr', 'true'); // OCR is always enabled and automatic
         
         this.showProgress('Processing document...');
         

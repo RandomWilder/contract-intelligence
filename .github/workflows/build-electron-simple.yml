@@ -59,14 +59,27 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Create PyInstaller spec file
+        working-directory: electron-app/python-backend
+        shell: bash
+        run: |
+          echo "Creating PyInstaller spec file for api_server_minimal.py..."
+          
+          # Write a simple spec file with essential components
+          echo 'from PyInstaller.utils.hooks import collect_data_files, collect_submodules' > api_server_minimal.spec
+          echo 'block_cipher = None' >> api_server_minimal.spec
+          echo 'a = Analysis(["api_server_minimal.py"], pathex=["."], hiddenimports=["openai", "chromadb", "fastapi", "uvicorn", "starlette", "pydantic", "tiktoken", "google.auth", "contract_intelligence"])' >> api_server_minimal.spec
+          echo 'pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)' >> api_server_minimal.spec
+          echo 'exe = EXE(pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [], name="api_server", debug=False, strip=False, upx=True, runtime_tmpdir=None, console=True, argv_emulation=True)' >> api_server_minimal.spec
+      
       - name: Build Python executable with PyInstaller
         working-directory: electron-app/python-backend
         shell: bash
         run: |
           echo "Building Python backend executable with PyInstaller..."
           
-          # Use our pre-created spec file
-          pyinstaller api_server.spec --clean --noconfirm --distpath ../pyinstaller-dist
+          # Use the spec file we created in the previous step
+          pyinstaller api_server_minimal.spec --clean --noconfirm --distpath ../pyinstaller-dist
           
           # Verify the executable was created
           if [ "${{ matrix.platform }}" = "win" ]; then
@@ -139,6 +152,32 @@ jobs:
           fi
           
           echo "All prerequisites verified successfully"
+          
+      - name: Create template settings file
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Creating default app_settings.json template..."
+          
+          # Create default template with null values for sensitive fields
+          echo '{"openai_api_key": null, "google_credentials_path": null, "chromadb_dir": "./chroma_db"}' > python-backend/app_settings.json.template
+          echo "Created app_settings.json.template"
+          
+      - name: Sanitize any existing settings
+        working-directory: electron-app
+        shell: bash
+        run: |
+          # Check if app_settings.json exists and create a safe copy for the build
+          if [ -f "python-backend/app_settings.json" ]; then
+            echo "Creating safe app_settings.json for build (removing sensitive keys)..."
+            
+            # Create safe version with null values
+            echo '{"openai_api_key": null, "google_credentials_path": null, "chromadb_dir": "./chroma_db"}' > python-backend/app_settings.json.safe
+            
+            # Temporarily replace the real settings with safe settings for the build
+            mv python-backend/app_settings.json python-backend/app_settings.json.bak
+            mv python-backend/app_settings.json.safe python-backend/app_settings.json
+          fi
 
       - name: Prepare PyInstaller files for electron-builder
         working-directory: electron-app
@@ -150,20 +189,66 @@ jobs:
           # Create resources directory for electron-builder
           mkdir -p resources
           
+          # Copy the executable based on platform
           if [ "${{ matrix.platform }}" = "win" ]; then
             [ -f "pyinstaller-dist/api_server.exe" ] || { echo "ERROR: api_server.exe not found"; exit 1; }
             cp pyinstaller-dist/api_server.exe resources/
             # Set executable permissions on Windows
             chmod +x resources/api_server.exe
-            echo "✅ Windows executable copied to resources/api_server.exe with executable permissions"
+            echo "Windows executable copied to resources/api_server.exe with executable permissions"
             ls -la resources/api_server.exe
           else
             [ -f "pyinstaller-dist/api_server" ] || { echo "ERROR: api_server not found"; exit 1; }
             cp pyinstaller-dist/api_server resources/
             # Set executable permissions on macOS
             chmod +x resources/api_server
-            echo "✅ macOS executable copied to resources/api_server with executable permissions"
+            echo "macOS executable copied to resources/api_server with executable permissions"
             ls -la resources/api_server
+          fi
+          
+          # Copy the app_settings template to resources for first-time setup
+          cp python-backend/app_settings.json.template resources/
+          echo "Default settings template copied to resources/"
+          
+          # Restore original app_settings.json if it was backed up
+          if [ -f "python-backend/app_settings.json.bak" ]; then
+            mv python-backend/app_settings.json.bak python-backend/app_settings.json
+            echo "Restored original app_settings.json from backup"
+          fi
+
+      - name: Verify no sensitive data in build
+        working-directory: electron-app
+        shell: bash
+        run: |
+          echo "Checking for sensitive data in resources and build files..."
+          
+          # Check if API keys or sensitive patterns exist in resources
+          echo "Checking resources directory for sensitive data..."
+          if [ -d "resources" ]; then
+            # Look for OpenAI API key patterns (with safe grep handling)
+            if grep -r "sk-[a-zA-Z0-9]" --include="*.json" resources/ > /dev/null 2>&1; then
+              echo "WARNING: Potential OpenAI API key found in resources! Replacing with null..."
+              find resources/ -name "*.json" -exec sed -i 's/"openai_api_key": "sk-[^"]*"/"openai_api_key": null/g' {} \;
+            fi
+            
+            # Check for other sensitive files
+            if [ -f "resources/google_service_account.json" ] || [ -f "resources/google_credentials.json" ]; then
+              echo "WARNING: Google credentials found in resources directory!"
+              rm -f resources/google_service_account.json resources/google_credentials.json
+              echo "Removed sensitive credential files from resources"
+            fi
+            
+            echo "Resources checked and sanitized for sensitive data"
+          fi
+          
+          # Final verification that template contains no actual API keys
+          if [ -f "resources/app_settings.json.template" ]; then
+            if grep -q "sk-" resources/app_settings.json.template; then
+              echo "ERROR: Template contains real API keys! Fixing..."
+              echo '{"openai_api_key": null, "google_credentials_path": null, "chromadb_dir": "./chroma_db"}' > resources/app_settings.json.template
+            else
+              echo "Template is properly sanitized (no API keys)"
+            fi
           fi
 
       - name: Verify final build structure
@@ -264,49 +349,50 @@ jobs:
 
       - name: Create release notes
         run: |
-          cat > release_notes.md << 'EOF'
-          # Contract Intelligence Platform ${{ steps.tag.outputs.tag }} - Electron Edition
-          
-          ## 🚀 Modern Desktop Application
-          
-          This release features the **Electron-based desktop application** with enhanced features and cross-platform compatibility.
-          
-          ### ✨ Key Features:
-          - **Smart Contract Analysis**: Advanced AI-powered contract intelligence
-          - **RTL Language Support**: Full Hebrew/Arabic text support with proper formatting
-          - **Persistent Data Storage**: Documents remain available across app restarts
-          - **Modern UI**: Clean, responsive interface with real-time notifications
-          - **Enhanced OCR**: Improved Google Vision API integration
-          - **Cross-Platform**: Native Windows and macOS applications
-          
-          ### 📦 Installation:
-          
-          **Windows:**
-          1. Download `Contract Intelligence Platform Setup *.exe`
-          2. Run the installer and follow the setup wizard
-          3. Launch from Start Menu or Desktop shortcut
-          
-          **macOS:**
-          1. Download `Contract Intelligence Platform-*.dmg`
-          2. Open the DMG and drag the app to Applications folder
-          3. **IMPORTANT**: Right-click the app → "Open" to bypass security warning
-          4. Click "Open" when prompted about unidentified developer
-          
-          ### 🔧 Requirements:
-          - **OpenAI API Key** (required for AI analysis)
-          - **Google Cloud Vision credentials** (JSON file for OCR functionality)
-          - Windows 10+ or macOS 10.14+
-          
-          ### 📄 Notes:
-          - The Electron app uses a separate database for data isolation
-          - Your existing data remains untouched in other versions
-          - First-time setup will guide you through API configuration
-          
-          ---
-          **Build Date:** $(date -u)  
-          **Commit:** ${GITHUB_SHA:0:7}  
-          **Architecture:** Electron + Python FastAPI Backend
-          EOF
+          # Write release notes to a file
+          {
+            echo "# Contract Intelligence Platform ${{ steps.tag.outputs.tag }} - Electron Edition"
+            echo ""
+            echo "## Modern Desktop Application"
+            echo ""
+            echo "This release features the **Electron-based desktop application** with enhanced features and cross-platform compatibility."
+            echo ""
+            echo "### Key Features:"
+            echo "- **Smart Contract Analysis**: Advanced AI-powered contract intelligence"
+            echo "- **RTL Language Support**: Full Hebrew/Arabic text support with proper formatting"
+            echo "- **Persistent Data Storage**: Documents remain available across app restarts"
+            echo "- **Modern UI**: Clean, responsive interface with real-time notifications"
+            echo "- **Enhanced OCR**: Improved Google Vision API integration"
+            echo "- **Cross-Platform**: Native Windows and macOS applications"
+            echo ""
+            echo "### Installation:"
+            echo ""
+            echo "**Windows:**"
+            echo "1. Download \`Contract Intelligence Platform Setup *.exe\`"
+            echo "2. Run the installer and follow the setup wizard"
+            echo "3. Launch from Start Menu or Desktop shortcut"
+            echo ""
+            echo "**macOS:**"
+            echo "1. Download \`Contract Intelligence Platform-*.dmg\`"
+            echo "2. Open the DMG and drag the app to Applications folder"
+            echo "3. **IMPORTANT**: Right-click the app → \"Open\" to bypass security warning"
+            echo "4. Click \"Open\" when prompted about unidentified developer"
+            echo ""
+            echo "### Requirements:"
+            echo "- **OpenAI API Key** (required for AI analysis)"
+            echo "- **Google Cloud Vision credentials** (JSON file for OCR functionality)"
+            echo "- Windows 10+ or macOS 10.14+"
+            echo ""
+            echo "### Notes:"
+            echo "- The Electron app uses a separate database for data isolation"
+            echo "- Your existing data remains untouched in other versions"
+            echo "- First-time setup will guide you through API configuration"
+            echo ""
+            echo "---"
+            echo "**Build Date:** $(date -u)"
+            echo "**Commit:** ${GITHUB_SHA:0:7}"
+            echo "**Architecture:** Electron + Python FastAPI Backend"
+          } > release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -314,9 +400,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Contract Intelligence ${{ steps.tag.outputs.tag }} - Electron
           body_path: release_notes.md
-          files: |
-            artifacts/*.exe
-            artifacts/*.dmg
+          files: artifacts/*.exe,artifacts/*.dmg
           draft: false
           prerelease: false
         env:

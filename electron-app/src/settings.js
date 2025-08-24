@@ -40,30 +40,37 @@ async function refreshStatus() {
         const data = await response.json();
         
         // Update status indicators
-        updateStatusIndicator('openai-status', data.openai_configured, 
-            data.openai_configured ? 'Connected' : 'Not Connected');
+        updateStatusIndicator('openai-status', data.openai.configured, 
+            data.openai.configured ? 'Connected' : 'Not Connected');
         
-        updateStatusIndicator('google-status', data.google_configured, 
-            data.google_configured ? 'Connected' : 'Not Connected');
+        updateStatusIndicator('google-status', data.google.configured, 
+            data.google.configured ? 'Connected' : 'Not Connected');
         
         // Update status overview
         document.getElementById('status-openai').textContent = 
-            data.openai_configured ? '✅ Connected' : '❌ Not Connected';
+            data.openai.configured ? '✅ Connected' : '❌ Not Connected';
         
         document.getElementById('status-google').textContent = 
-            data.google_configured ? '✅ Connected' : '❌ Not Connected';
+            data.google.configured ? '✅ Connected' : '❌ Not Connected';
         
         // Update available features
         const features = [];
-        if (data.openai_configured) features.push('AI Chat', 'Document Analysis');
-        if (data.google_configured) features.push('OCR', 'Drive Access');
+        if (data.openai.configured) features.push('AI Chat', 'Document Analysis');
+        if (data.google.configured) features.push('OCR', 'Drive Access');
         
         document.getElementById('status-features').textContent = 
             features.length > 0 ? features.join(', ') : 'None (configure services above)';
             
     } catch (error) {
         console.error('Failed to refresh status:', error);
-        showMessage('openai-message', 'Failed to connect to backend', 'error');
+        showMessage('openai-message', 'Failed to connect to backend. Please ensure the server is running.', 'error');
+        
+        // Update status indicators to show disconnected state
+        updateStatusIndicator('openai-status', false, 'Not Connected');
+        updateStatusIndicator('google-status', false, 'Not Connected');
+        document.getElementById('status-openai').textContent = '❌ Not Connected';
+        document.getElementById('status-google').textContent = '❌ Not Connected';
+        document.getElementById('status-features').textContent = 'None (backend not available)';
     }
 }
 
@@ -93,10 +100,12 @@ async function testAndSaveOpenAI() {
         const data = await response.json();
         
         if (response.ok) {
+            // More descriptive success message
             showMessage('openai-message', 
-                `✅ ${data.message} (${data.models_available} models available)`, 'success');
+                `✅ ${data.message}. Your OpenAI API key is now active.`, 'success');
             document.getElementById('openai-key').value = ''; // Clear for security
-            refreshStatus();
+            // Make sure to refresh status to update UI
+            setTimeout(refreshStatus, 500);
         } else {
             showMessage('openai-message', `❌ ${data.detail}`, 'error');
         }
@@ -148,7 +157,8 @@ async function uploadGoogleCredentials() {
             showMessage('google-message', 
                 `✅ ${data.message}. Services available: ${data.services.join(', ')}`, 'success');
             fileInput.value = ''; // Clear file input
-            refreshStatus(); // Update status indicators
+            // Make sure to refresh status to update UI
+            setTimeout(refreshStatus, 500);
         } else {
             showMessage('google-message', `❌ ${data.detail}`, 'error');
         }
