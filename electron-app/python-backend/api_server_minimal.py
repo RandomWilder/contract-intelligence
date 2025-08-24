@@ -344,7 +344,7 @@ if FASTAPI_AVAILABLE:
         
         return {
             "status": "healthy",
-            "version": "1.5.56",
+            "version": "1.5.57",
             "backend": "minimal",
             "chromadb_ready": chromadb_ready,
             "openai_ready": openai_ready,
@@ -713,7 +713,7 @@ if FASTAPI_AVAILABLE:
                 "persistent_dir": app_settings.get("chromadb_dir")
             },
             "system": {
-                "version": "1.5.56",
+                "version": "1.5.57",
                 "backend": "minimal"
             }
         }
