@@ -68,7 +68,19 @@ jobs:
           # Write a simple spec file with essential components
           echo 'from PyInstaller.utils.hooks import collect_data_files, collect_submodules' > api_server_minimal.spec
           echo 'block_cipher = None' >> api_server_minimal.spec
-          echo 'a = Analysis(["api_server_minimal.py"], pathex=["."], hiddenimports=["openai", "chromadb", "fastapi", "uvicorn", "starlette", "pydantic", "tiktoken", "google.auth", "contract_intelligence"])' >> api_server_minimal.spec
+          echo 'hiddenimports = [' >> api_server_minimal.spec
+          echo '    "openai", "chromadb", "fastapi", "uvicorn", "starlette", "pydantic", "tiktoken", "google.auth", "contract_intelligence",' >> api_server_minimal.spec
+          echo '    "uvicorn.logging", "uvicorn.loops", "uvicorn.loops.auto", "uvicorn.protocols", "uvicorn.protocols.http",' >> api_server_minimal.spec
+          echo '    "uvicorn.protocols.http.auto", "uvicorn.protocols.websockets", "uvicorn.protocols.websockets.auto",' >> api_server_minimal.spec
+          echo '    "uvicorn.lifespan", "uvicorn.lifespan.on", "uvicorn.lifespan.off",' >> api_server_minimal.spec
+          echo '    "google.oauth2", "google.oauth2.service_account", "google.auth.transport.requests",' >> api_server_minimal.spec
+          echo '    "googleapiclient", "googleapiclient.discovery", "googleapiclient.http",' >> api_server_minimal.spec
+          echo '    "googleapiclient.errors", "chromadb.config", "chromadb.utils.embedding_functions",' >> api_server_minimal.spec
+          echo '    "fitz", "docx", "contextlib", "asynccontextmanager",' >> api_server_minimal.spec
+          echo '    "uuid", "io", "re", "math", "base64", "platform"' >> api_server_minimal.spec
+          echo ']' >> api_server_minimal.spec
+          echo 'datas = collect_data_files("chromadb") + collect_data_files("uvicorn")' >> api_server_minimal.spec
+          echo 'a = Analysis(["api_server_minimal.py"], pathex=["."], hiddenimports=hiddenimports, datas=datas)' >> api_server_minimal.spec
           echo 'pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)' >> api_server_minimal.spec
           echo 'exe = EXE(pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [], name="api_server", debug=False, strip=False, upx=True, runtime_tmpdir=None, console=True, argv_emulation=True)' >> api_server_minimal.spec
       
@@ -87,9 +99,21 @@ jobs:
             echo "Windows executable created: ../pyinstaller-dist/api_server.exe"
             ls -la ../pyinstaller-dist/api_server.exe
             
-            # Test Windows executable can run
-            echo "Testing Windows executable..."
-            cd .. && ./pyinstaller-dist/api_server.exe --test-only || echo "WARNING: Executable test failed, but continuing..."
+            # Test Windows executable can run with verbose debug output
+            echo "Testing Windows executable with full diagnostics..."
+            cd .. && (./pyinstaller-dist/api_server.exe --test-only --verbose > backend_test_output.log 2>&1 || true)
+            
+            # Display test output for diagnosis
+            echo "=== Backend Test Output ==="
+            cat backend_test_output.log
+            echo "=== End Test Output ==="
+            
+            # Check for critical errors in output
+            if grep -q "ImportError\|ModuleNotFoundError" backend_test_output.log; then
+              echo "CRITICAL: Missing dependencies detected in executable test"
+              cat backend_test_output.log
+              exit 1
+            fi
           else
             [ -f "../pyinstaller-dist/api_server" ] || { echo "ERROR: api_server executable not created"; exit 1; }
             echo "macOS executable created: ../pyinstaller-dist/api_server"
@@ -100,9 +124,21 @@ jobs:
             chmod +x ../pyinstaller-dist/api_server
             ls -la ../pyinstaller-dist/api_server
             
-            # Test macOS executable can run
-            echo "Testing macOS executable..."
-            cd .. && ./pyinstaller-dist/api_server --test-only || echo "WARNING: Executable test failed, but continuing..."
+            # Test macOS executable can run with verbose debug output
+            echo "Testing macOS executable with full diagnostics..."
+            cd .. && (./pyinstaller-dist/api_server --test-only --verbose > backend_test_output.log 2>&1 || true)
+            
+            # Display test output for diagnosis
+            echo "=== Backend Test Output ==="
+            cat backend_test_output.log
+            echo "=== End Test Output ==="
+            
+            # Check for critical errors in output
+            if grep -q "ImportError\|ModuleNotFoundError" backend_test_output.log; then
+              echo "CRITICAL: Missing dependencies detected in executable test"
+              cat backend_test_output.log
+              exit 1
+            fi
           fi
           
           echo "PyInstaller build completed successfully"

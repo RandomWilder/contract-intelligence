@@ -247,6 +247,28 @@ function startPythonBackend() {
                     throw new Error(`Backend executable not found at: ${backendPath}`);
                 }
                 
+                // Additional diagnostic: Test if executable can be run with a simple test
+                if (process.platform === 'win32') {
+                    try {
+                        console.log(`Performing basic executable test on Windows...`);
+                        // Execute with --test-only to avoid starting the server
+                        const { execSync } = require('child_process');
+                        const testOutput = execSync(`"${backendPath}" --test-only --verbose`, {
+                            cwd: workingDir,
+                            timeout: 5000,
+                            stdio: 'pipe',
+                            encoding: 'utf8'
+                        });
+                        console.log('Basic executable test successful!');
+                        console.log(testOutput.substring(0, 500) + '...');  // Print first 500 chars only
+                    } catch (testError) {
+                        console.warn(`Executable test failed: ${testError.message}`);
+                        // Store error info but don't fail - we'll try the full launch anyway
+                        if (testError.stdout) console.log(`Test stdout: ${testError.stdout.substring(0, 500)}`);
+                        if (testError.stderr) console.log(`Test stderr: ${testError.stderr.substring(0, 500)}`);
+                    }
+                }
+                
                 if (process.platform === 'win32') {
                     // **WINDOWS FIX: Ensure file is not read-only and has proper attributes**
                     console.log('Checking Windows executable attributes...');
@@ -339,6 +361,28 @@ function startPythonBackend() {
             handleBackendOutput(data); // Also check stderr for readiness signals
         });
 
+        // Capture all stdout and stderr for detailed logging
+        let stdoutBuffer = "";
+        let stderrBuffer = "";
+        
+        pythonProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            stdoutBuffer += output;
+            // Keep buffer from growing too large
+            if (stdoutBuffer.length > 10000) {
+                stdoutBuffer = stdoutBuffer.substring(stdoutBuffer.length - 10000);
+            }
+        });
+        
+        pythonProcess.stderr.on('data', (data) => {
+            const output = data.toString();
+            stderrBuffer += output;
+            // Keep buffer from growing too large
+            if (stderrBuffer.length > 10000) {
+                stderrBuffer = stderrBuffer.substring(stderrBuffer.length - 10000);
+            }
+        });
+        
         pythonProcess.on('close', (code) => {
             console.log(`Python backend exited with code ${code}`);
             
@@ -350,11 +394,41 @@ function startPythonBackend() {
                 console.log(`isDev: ${isDev}`);
                 console.log(`Backend path: ${backendPath}`);
                 console.log(`Working directory: ${workingDir}`);
+                
+                // Write the captured stdout and stderr to a log file for diagnosis
+                const logPath = path.join(app.getPath('userData'), 'backend_crash.log');
+                try {
+                    fs.writeFileSync(logPath, 
+                        `===== BACKEND CRASH LOG =====\n` +
+                        `Timestamp: ${new Date().toISOString()}\n` +
+                        `Exit code: ${code}\n` +
+                        `Platform: ${process.platform}\n` +
+                        `Backend path: ${backendPath}\n\n` +
+                        `===== CAPTURED STDOUT =====\n${stdoutBuffer}\n\n` +
+                        `===== CAPTURED STDERR =====\n${stderrBuffer}\n`
+                    );
+                    console.log(`Wrote detailed crash log to: ${logPath}`);
+                } catch (logError) {
+                    console.error(`Failed to write crash log: ${logError.message}`);
+                }
+                
                 console.log(`=== END CRASH DIAGNOSTIC ===`);
                 
+                // Check for specific error patterns in the captured output
+                let specificError = "";
+                if (stderrBuffer.includes('ModuleNotFoundError') || stderrBuffer.includes('ImportError')) {
+                    const errorMatch = stderrBuffer.match(/No module named ['"](.*?)['"]/);
+                    if (errorMatch) {
+                        specificError = `Missing Python module: ${errorMatch[1]}. `;
+                    } else {
+                        specificError = "Missing Python dependencies. ";
+                    }
+                }
+                
                 const errorMessage = process.platform === 'darwin' 
-                    ? `Python backend stopped unexpectedly (code: ${code}). This might be due to missing dependencies, permissions, or macOS security restrictions. Please check the console for details and try right-clicking the app and selecting "Open" to bypass security warnings.`
-                    : `Python backend stopped unexpectedly (code: ${code}). Please check your API configuration and ensure all dependencies are available.`;
+                    ? `Python backend stopped unexpectedly (code: ${code}). ${specificError}This might be due to missing dependencies, permissions, or macOS security restrictions. A detailed log has been saved to: ${logPath}`
+                    : `Python backend stopped unexpectedly (code: ${code}). ${specificError}A detailed log has been saved to: ${logPath}`;
+                
                 showErrorDialog(errorMessage);
             }
         });

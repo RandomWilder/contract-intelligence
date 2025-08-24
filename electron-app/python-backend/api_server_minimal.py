@@ -309,7 +309,7 @@ if FASTAPI_AVAILABLE:
         
         return {
             "status": "healthy",
-            "version": "1.5.52",
+            "version": "1.5.54",
             "backend": "minimal",
             "chromadb_ready": chromadb_ready,
             "openai_ready": openai_ready,
@@ -678,7 +678,7 @@ if FASTAPI_AVAILABLE:
                 "persistent_dir": app_settings.get("chromadb_dir")
             },
             "system": {
-                "version": "1.5.52",
+                "version": "1.5.54",
                 "backend": "minimal"
             }
         }
@@ -1378,6 +1378,71 @@ if __name__ == "__main__":
     
     # Check for test-only mode (for CI/CD environments)
     test_mode = "--test-only" in sys.argv
+    verbose_mode = "--verbose" in sys.argv
+    
+    if verbose_mode:
+        print("[DEBUG] Running in verbose diagnostic mode")
+        print(f"[DEBUG] Python version: {sys.version}")
+        print(f"[DEBUG] Platform: {platform.platform()}")
+        print(f"[DEBUG] Executable: {sys.executable}")
+        print(f"[DEBUG] Current working directory: {os.getcwd()}")
+        print(f"[DEBUG] sys.path: {sys.path}")
+        
+        # Print available modules for diagnosis
+        print("[DEBUG] Checking critical dependency availability:")
+        dependencies = [
+            "fastapi", "uvicorn", "openai", "chromadb", "google.oauth2", 
+            "googleapiclient", "starlette", "pydantic", "tiktoken"
+        ]
+        for dep in dependencies:
+            try:
+                if dep == "openai":
+                    import openai
+                    print(f"[DEBUG] {dep} version: {openai.__version__}")
+                elif dep == "fastapi":
+                    import fastapi
+                    print(f"[DEBUG] {dep} version: {fastapi.__version__}")
+                elif dep == "uvicorn":
+                    import uvicorn
+                    print(f"[DEBUG] {dep} version: {uvicorn.__version__}")
+                elif dep == "chromadb":
+                    import chromadb
+                    print(f"[DEBUG] {dep} available")
+                elif dep == "google.oauth2":
+                    from google.oauth2 import service_account
+                    print(f"[DEBUG] {dep} available")
+                elif dep == "googleapiclient":
+                    import googleapiclient
+                    print(f"[DEBUG] {dep} available")
+                elif dep == "starlette":
+                    import starlette
+                    print(f"[DEBUG] {dep} version: {starlette.__version__}")
+                elif dep == "pydantic":
+                    import pydantic
+                    print(f"[DEBUG] {dep} version: {pydantic.__version__}")
+                elif dep == "tiktoken":
+                    import tiktoken
+                    print(f"[DEBUG] {dep} available")
+                else:
+                    print(f"[DEBUG] {dep} imported successfully")
+            except ImportError as e:
+                print(f"[DEBUG] {dep} IMPORT ERROR: {e}")
+            except Exception as e:
+                print(f"[DEBUG] {dep} ERROR: {e}")
+                
+        # Check if we're in a PyInstaller bundle
+        if getattr(sys, 'frozen', False):
+            print("[DEBUG] Running from PyInstaller bundle")
+            print(f"[DEBUG] sys._MEIPASS: {getattr(sys, '_MEIPASS', 'Not available')}")
+            
+            # Check for any file access issues in the bundle
+            try:
+                bundle_dir = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+                print(f"[DEBUG] Bundle directory: {bundle_dir}")
+                files = os.listdir(bundle_dir)
+                print(f"[DEBUG] First 10 files in bundle: {files[:10]}")
+            except Exception as e:
+                print(f"[DEBUG] Error listing bundle files: {e}")
     
     print("[INFO] Starting Contract Intelligence Minimal Backend Server...")
     
@@ -1392,6 +1457,16 @@ if __name__ == "__main__":
     # Test mode for CI/CD environments - start server briefly then exit
     if test_mode:
         print("[INFO] Running in test-only mode for CI/CD environment")
+        if verbose_mode:
+            # Perform basic initialization to test dependency loading
+            print("[DEBUG] Test-only mode with initialization check")
+            try:
+                initialize()
+                print("[DEBUG] Initialization successful in test-only mode")
+            except Exception as e:
+                print(f"[ERROR] Initialization failed in test-only mode: {e}")
+                traceback.print_exc()
+                sys.exit(1)
         sys.exit(0)
     
     # Normal operation mode - run server continuously
@@ -1402,12 +1477,17 @@ if __name__ == "__main__":
                 app,
                 host="127.0.0.1",
                 port=port,
-                log_level="info",
-                access_log=False
+                log_level="debug" if verbose_mode else "info",
+                access_log=verbose_mode
             )
         except Exception as e:
             print(f"[ERROR] Failed to start FastAPI server: {e}")
+            traceback.print_exc()
             exit(1)
     else:
         print("[ERROR] FastAPI not available. Cannot start server.")
+        print("[DEBUG] Available modules:")
+        for name, module in sys.modules.items():
+            if not name.startswith('_'):
+                print(f"  - {name}")
         exit(1)
